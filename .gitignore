@@ -3,6 +3,7 @@
 .myenv/
 venv/
 env/
+.venv_meteo/
 
 # Python
 __pycache__/

@@ -1,0 +1,4 @@
+0 2 * * * cd /mnt/c/Users/timot/DataScience/DataProjects/SEP25-BMLE-MLOPS-METEO/mon_projet_ml && ./scripts/preprocess.sh >> cron.log 2>&1
+15 2 * * * cd /mnt/c/Users/timot/DataScience/DataProjects/SEP25-BMLE-MLOPS-METEO/mon_projet_ml && ./scripts/train.sh >> cron.log 2>&1
+30 2 * * * cd /mnt/c/Users/timot/DataScience/DataProjects/SEP25-BMLE-MLOPS-METEO/mon_projet_ml && ./scripts/evaluate.sh >> cron.log 2>&1
+45 2 * * * cd /mnt/c/Users/timot/DataScience/DataProjects/SEP25-BMLE-MLOPS-METEO/mon_projet_ml && ./scripts/predict.sh >> cron.log 2>&1
