@@ -7,9 +7,34 @@
 
 ### Installation
 ```bash
-cd mon_projet_ml
+cd .
 make setup
 ```
+
+### DVC + MLflow (Dagshub)
+Ce projet utilise DVC pour versionner `data/`, `models/` (uniquement le binaire) et `outputs/`,
+et MLflow pour tracker les runs.
+
+1) Récupérer les données et modèles (DVC)
+```bash
+export DAGSHUB_TOKEN="VOTRE_TOKEN"
+export AWS_ACCESS_KEY_ID="$DAGSHUB_TOKEN"
+export AWS_SECRET_ACCESS_KEY="$DAGSHUB_TOKEN"
+dvc pull
+```
+
+2) Configurer MLflow vers Dagshub
+```bash
+export MLFLOW_TRACKING_URI="https://dagshub.com/timotheemonod-creator/SEP25-BMLE-MLOPS-METEO.mlflow"
+export MLFLOW_TRACKING_USERNAME="timotheemonod-creator"
+export MLFLOW_TRACKING_PASSWORD="$DAGSHUB_TOKEN"
+```
+
+3) Lancer un entraînement
+```bash
+make train
+```
+Les métriques sont visibles dans l’onglet “Experiments” de Dagshub.
 
 ### Entraînement
 ```bash
@@ -72,7 +97,6 @@ docker run -p 8000:8000 meteo-api
 
 ### Structure
 ```
-mon_projet_ml/
 ├── data/raw/              # weatherAUS.csv
 ├── data/processed/
 ├── models/                # pipeline.joblib
