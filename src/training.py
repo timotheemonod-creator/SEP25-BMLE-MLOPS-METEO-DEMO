@@ -20,11 +20,14 @@ def train(raw_path, model_path):
 
     preprocessor = build_preprocessor(cat_cols, num_cols)
     model = XGBClassifier(
-        n_estimators=300,
-        max_depth=5,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
+        n_estimators=796,
+        max_depth=10,
+        learning_rate=0.11812558198339064,
+        subsample=0.7724069195699388,
+        colsample_bytree=0.7000620673916282,
+        min_child_weight=6,
+        reg_alpha=3.479275996079184e-05,
+        reg_lambda=1.3538647103817488e-06,
         eval_metric="logloss",
         random_state=42
     )
