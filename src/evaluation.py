@@ -1,4 +1,5 @@
 import joblib
+import mlflow
 
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import train_test_split
@@ -29,6 +30,11 @@ def evaluate(raw_path, model_path):
 if __name__ == "__main__":
     raw_path = "data/raw/weatherAUS.csv"
     model_path = "models/pipeline.joblib"
-    metrics = evaluate(raw_path, model_path)
-    for k, v in metrics.items():
-        print(f"{k}: {v:.4f}")
+
+    mlflow.set_experiment("weather-ml")
+    with mlflow.start_run(run_name="evaluation"):
+        metrics = evaluate(raw_path, model_path)
+        mlflow.log_metrics(metrics)
+        mlflow.log_param("model_path", model_path)
+        for k, v in metrics.items():
+            print(f"{k}: {v:.4f}")
