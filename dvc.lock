@@ -1,0 +1,79 @@
+schema: '2.0'
+stages:
+  train:
+    cmd: python -m src.training
+    deps:
+    - path: data/raw/weatherAUS.csv
+      hash: md5
+      md5: a65cf8b8719b1a65db4f361eeec18457
+      size: 14094055
+      isexec: true
+    - path: src/data_preparation.py
+      hash: md5
+      md5: 4a6a410694a30f591ed96ebaba75ac21
+      size: 2671
+      isexec: true
+    - path: src/training.py
+      hash: md5
+      md5: e1391fb49ae6821c1f06334810f1cb36
+      size: 2198
+      isexec: true
+    outs:
+    - path: models/pipeline.joblib
+      hash: md5
+      md5: 862ce85ccf978419160e3b7d756da475
+      size: 8157441
+      isexec: true
+  evaluate:
+    cmd: python -m src.evaluation
+    deps:
+    - path: data/raw/weatherAUS.csv
+      hash: md5
+      md5: a65cf8b8719b1a65db4f361eeec18457
+      size: 14094055
+      isexec: true
+    - path: models/pipeline.joblib
+      hash: md5
+      md5: 862ce85ccf978419160e3b7d756da475
+      size: 8157441
+      isexec: true
+    - path: src/data_preparation.py
+      hash: md5
+      md5: 4a6a410694a30f591ed96ebaba75ac21
+      size: 2671
+      isexec: true
+    - path: src/evaluation.py
+      hash: md5
+      md5: ef0c9128111e5de8e740f5b95b8fe17c
+      size: 1524
+      isexec: true
+    outs:
+    - path: metrics/eval.json
+      hash: md5
+      md5: 0be8116582ab8469db1d693da6b20319
+      size: 163
+      isexec: true
+  predict:
+    cmd: python -m src.predict_batch
+    deps:
+    - path: data/raw/weatherAUS.csv
+      hash: md5
+      md5: a65cf8b8719b1a65db4f361eeec18457
+      size: 14094055
+      isexec: true
+    - path: models/pipeline.joblib
+      hash: md5
+      md5: 862ce85ccf978419160e3b7d756da475
+      size: 8157441
+      isexec: true
+    - path: src/predict_batch.py
+      hash: md5
+      md5: ac849bedef860776c2156bb362c7ac43
+      size: 1378
+      isexec: true
+    outs:
+    - path: outputs/predictions_daily.csv
+      hash: md5
+      md5: b8a46dccc8a09d4c74a20cef1a2f4a2c
+      size: 124
+      isexec: true
