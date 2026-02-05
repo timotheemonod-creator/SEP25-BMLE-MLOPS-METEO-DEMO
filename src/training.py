@@ -62,7 +62,7 @@ def train(processed_path, model_path):
         }
         mlflow.log_metrics(metrics)
 
-        mlflow.sklearn.log_model(pipeline, artifact_path="model")
+        mlflow.sklearn.log_model(pipeline, artifact_path="model", registered_model_name="weather-ml")
 
     joblib.dump(pipeline, model_path)
     return metrics
