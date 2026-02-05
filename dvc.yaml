@@ -1,16 +1,18 @@
 stages:
   train:
-    cmd: python -m src.training
+    cmd: bash -c "source scripts/mlflow_env.local.sh && scripts/ensure_mlflow_env.sh
+      && python -m src.training"
     deps:
-    - data/raw/weatherAUS.csv
+    - data/processed/weatherAUS_processed.csv
     - src/data_preparation.py
     - src/training.py
     outs:
     - models/pipeline.joblib
   evaluate:
-    cmd: python -m src.evaluation
+    cmd: bash -c "source scripts/mlflow_env.local.sh && scripts/ensure_mlflow_env.sh
+      && python -m src.evaluation"
     deps:
-    - data/raw/weatherAUS.csv
+    - data/processed/weatherAUS_processed.csv
     - models/pipeline.joblib
     - src/data_preparation.py
     - src/evaluation.py
@@ -18,10 +20,18 @@ stages:
     - metrics/eval.json:
         cache: false
   predict:
-    cmd: python -m src.predict_batch
+    cmd: bash -c "source scripts/mlflow_env.local.sh && scripts/ensure_mlflow_env.sh
+      && python -m src.predict_batch"
     deps:
     - data/raw/weatherAUS.csv
     - models/pipeline.joblib
     - src/predict_batch.py
     outs:
     - outputs/predictions_daily.csv
+  preprocess:
+    cmd: python -m src.data_preparation
+    deps:
+    - data/raw/weatherAUS.csv
+    - src/data_preparation.py
+    outs:
+    - data/processed/weatherAUS_processed.csv

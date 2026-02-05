@@ -6,11 +6,11 @@ import mlflow
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 
-from src.data_preparation import prepare_dataset
+from src.data_preparation import prepare_dataset_from_processed
 
 
-def evaluate(raw_path, model_path):
-    X, y, _, _ = prepare_dataset(raw_path)
+def evaluate(processed_path, model_path):
+    X, y, _, _ = prepare_dataset_from_processed(processed_path)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
@@ -36,13 +36,13 @@ def save_metrics(metrics, path):
 
 
 if __name__ == "__main__":
-    raw_path = "data/raw/weatherAUS.csv"
+    processed_path = "data/processed/weatherAUS_processed.csv"
     model_path = "models/pipeline.joblib"
     metrics_path = "metrics/eval.json"
 
     mlflow.set_experiment("weather-ml")
     with mlflow.start_run(run_name="evaluation"):
-        metrics = evaluate(raw_path, model_path)
+        metrics = evaluate(processed_path, model_path)
         mlflow.log_metrics(metrics)
         mlflow.log_param("model_path", model_path)
         save_metrics(metrics, metrics_path)

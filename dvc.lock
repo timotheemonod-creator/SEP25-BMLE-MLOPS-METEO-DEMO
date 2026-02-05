@@ -1,60 +1,63 @@
 schema: '2.0'
 stages:
   train:
-    cmd: python -m src.training
+    cmd: bash -c "source scripts/mlflow_env.local.sh && 
+      scripts/ensure_mlflow_env.sh && python -m src.training"
     deps:
-    - path: data/raw/weatherAUS.csv
+    - path: data/processed/weatherAUS_processed.csv
       hash: md5
-      md5: a65cf8b8719b1a65db4f361eeec18457
-      size: 14094055
+      md5: 672f3b34074b1bf5bb1b2a0323cf0d50
+      size: 14591253
       isexec: true
     - path: src/data_preparation.py
       hash: md5
-      md5: 4a6a410694a30f591ed96ebaba75ac21
-      size: 2671
+      md5: 5490a2db10b817a72c477e455f719c38
+      size: 3497
       isexec: true
     - path: src/training.py
       hash: md5
-      md5: e1391fb49ae6821c1f06334810f1cb36
-      size: 2198
+      md5: 6f3985cba5d63fcc5bcc384d13d3b055
+      size: 2426
       isexec: true
     outs:
     - path: models/pipeline.joblib
       hash: md5
-      md5: 862ce85ccf978419160e3b7d756da475
-      size: 8157441
+      md5: 4fa29568bed94e7256c2a29e04d4cdd2
+      size: 14833732
       isexec: true
   evaluate:
-    cmd: python -m src.evaluation
+    cmd: bash -c "source scripts/mlflow_env.local.sh && 
+      scripts/ensure_mlflow_env.sh && python -m src.evaluation"
     deps:
-    - path: data/raw/weatherAUS.csv
+    - path: data/processed/weatherAUS_processed.csv
       hash: md5
-      md5: a65cf8b8719b1a65db4f361eeec18457
-      size: 14094055
+      md5: 672f3b34074b1bf5bb1b2a0323cf0d50
+      size: 14591253
       isexec: true
     - path: models/pipeline.joblib
       hash: md5
-      md5: 862ce85ccf978419160e3b7d756da475
-      size: 8157441
+      md5: 4fa29568bed94e7256c2a29e04d4cdd2
+      size: 14833732
       isexec: true
     - path: src/data_preparation.py
       hash: md5
-      md5: 4a6a410694a30f591ed96ebaba75ac21
-      size: 2671
+      md5: 5490a2db10b817a72c477e455f719c38
+      size: 3497
       isexec: true
     - path: src/evaluation.py
       hash: md5
-      md5: ef0c9128111e5de8e740f5b95b8fe17c
-      size: 1524
+      md5: c4c8ac40722ec1cad3e456b20e0fe24f
+      size: 1594
       isexec: true
     outs:
     - path: metrics/eval.json
       hash: md5
-      md5: 0be8116582ab8469db1d693da6b20319
+      md5: a8dbcb3f281195d4709d6e9f7b84d462
       size: 163
       isexec: true
   predict:
-    cmd: python -m src.predict_batch
+    cmd: bash -c "source scripts/mlflow_env.local.sh && 
+      scripts/ensure_mlflow_env.sh && python -m src.predict_batch"
     deps:
     - path: data/raw/weatherAUS.csv
       hash: md5
@@ -63,8 +66,8 @@ stages:
       isexec: true
     - path: models/pipeline.joblib
       hash: md5
-      md5: 862ce85ccf978419160e3b7d756da475
-      size: 8157441
+      md5: 4fa29568bed94e7256c2a29e04d4cdd2
+      size: 14833732
       isexec: true
     - path: src/predict_batch.py
       hash: md5
@@ -74,6 +77,25 @@ stages:
     outs:
     - path: outputs/predictions_daily.csv
       hash: md5
-      md5: b8a46dccc8a09d4c74a20cef1a2f4a2c
+      md5: b156e01f762ce5a7c27e91f6cacf488a
       size: 124
+      isexec: true
+  preprocess:
+    cmd: python -m src.data_preparation
+    deps:
+    - path: data/raw/weatherAUS.csv
+      hash: md5
+      md5: a65cf8b8719b1a65db4f361eeec18457
+      size: 14094055
+      isexec: true
+    - path: src/data_preparation.py
+      hash: md5
+      md5: 5490a2db10b817a72c477e455f719c38
+      size: 3497
+      isexec: true
+    outs:
+    - path: data/processed/weatherAUS_processed.csv
+      hash: md5
+      md5: 672f3b34074b1bf5bb1b2a0323cf0d50
+      size: 14591253
       isexec: true

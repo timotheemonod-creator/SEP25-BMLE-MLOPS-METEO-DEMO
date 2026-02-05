@@ -9,11 +9,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
-from src.data_preparation import build_preprocessor, prepare_dataset
+from src.data_preparation import build_preprocessor, prepare_dataset_from_processed
 
 
-def train(raw_path, model_path):
-    X, y, cat_cols, num_cols = prepare_dataset(raw_path)
+def train(processed_path, model_path):
+    X, y, cat_cols, num_cols = prepare_dataset_from_processed(processed_path)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
@@ -69,8 +69,8 @@ def train(raw_path, model_path):
 
 
 if __name__ == "__main__":
-    raw_path = "data/raw/weatherAUS.csv"
+    processed_path = "data/processed/weatherAUS_processed.csv"
     model_path = "models/pipeline.joblib"
-    metrics = train(raw_path, model_path)
+    metrics = train(processed_path, model_path)
     for k, v in metrics.items():
         print(f"{k}: {v:.4f}")
