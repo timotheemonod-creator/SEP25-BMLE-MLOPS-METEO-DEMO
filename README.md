@@ -7,7 +7,7 @@
 
 ### Installation
 ```bash
-cd .
+cd mon_projet_ml
 make setup
 ```
 
@@ -72,7 +72,7 @@ docker run -p 8000:8000 meteo-api
 
 ### Structure
 ```
-
+mon_projet_ml/
 ├── data/raw/              # weatherAUS.csv
 ├── data/processed/
 ├── models/                # pipeline.joblib

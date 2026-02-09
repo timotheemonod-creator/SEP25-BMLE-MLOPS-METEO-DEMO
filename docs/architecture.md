@@ -51,7 +51,7 @@
                              ORCHESTRATION LOCALE
 ═══════════════════════════════════════════════════════════════════════════════
 
-Makefile (Makefile)
+Makefile (mon_projet_ml/Makefile)
 - make setup      -> pip install -r requirements.txt
 - make preprocess -> python -m src.data_preparation
 - make train      -> python -m src.training
@@ -59,13 +59,13 @@ Makefile (Makefile)
 - make predict    -> python -m src.predict_batch
 - make api        -> uvicorn api.main:app
 
-Scripts (scripts/)
+Scripts (mon_projet_ml/scripts/)
 - preprocess.sh   -> python -m src.data_preparation
 - train.sh        -> python -m src.training
 - evaluate.sh     -> python -m src.evaluation
 - predict.sh      -> python -m src.predict_batch
 
-Cron (scripts/cron.txt)
+Cron (mon_projet_ml/scripts/cron.txt)
 - 02:00 preprocess
 - 02:15 train
 - 02:30 evaluate
@@ -89,7 +89,7 @@ Artefact :
                                API D’INFÉRENCE
 ═══════════════════════════════════════════════════════════════════════════════
 
-FastAPI (api/main.py)
+FastAPI (mon_projet_ml/api/main.py)
 - GET  /health
 - POST /predict
     Entrée : features météo + Date
@@ -107,7 +107,7 @@ Swagger : http://127.0.0.1:8000/docs
                                CONTENEURISATION
 ═══════════════════════════════════════════════════════════════════════════════
 
-Dockerfile (Dockerfile)
+Dockerfile (mon_projet_ml/Dockerfile)
 - base python:3.12-slim
 - installe requirements.txt
 - copie api/, src/, models/
@@ -140,7 +140,7 @@ README.md
                                  ARBORESCENCE
 ═══════════════════════════════════════════════════════════════════════════════
 
-
+mon_projet_ml/
 ├── api/                    # FastAPI
 ├── data/
 │   ├── raw/                # weatherAUS.csv

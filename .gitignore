@@ -1,11 +1,9 @@
 # Environnements
 .venv/
-.myenv/
-venv/
-env/
-.venv_meteo/
+.env
 
 # Python
+.pytest_cache/
 __pycache__/
 *.py[cod]
 *.pyo
@@ -15,11 +13,12 @@ __pycache__/
 dist/
 build/
 
-# Jupyter / IDE
-.ipynb_checkpoints/
-.vscode/
-.idea/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Data
+data/
+
+
