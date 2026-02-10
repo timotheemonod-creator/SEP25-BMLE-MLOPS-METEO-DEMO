@@ -34,7 +34,8 @@ scripts/env.local.sh
 env
 
 
-outputs/
-!outputs/
-!outputs/preds_api.csv.dvc
 logs/preds_api.csv
+
+outputs/*
+!outputs/preds_api.csv
+!outputs/preds_api.csv.dvc

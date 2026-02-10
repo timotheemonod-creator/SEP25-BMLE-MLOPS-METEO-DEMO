@@ -212,7 +212,6 @@ def predict(
 
     try:
         model = load_model()
-        print("Model loaded successfully")
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -226,6 +225,7 @@ def predict(
         y_proba = model.predict_proba(df)[:, 1][0]
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Model prediction error: {exc}") from exc
+
     y_pred = int(y_proba >= 0.5)
 
     # Best-effort logging of API predictions to CSV (append-only)
@@ -246,41 +246,4 @@ def predict(
     except Exception as exc:
         print(f"Warning: failed to log prediction: {exc}")
 
-    # Best-effort logging of API predictions to CSV (append-only)
-    try:
-        PRED_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        row = {
-            "logged_at_utc": datetime.utcnow().isoformat(),
-            "target_date": str(features.Date),
-            "location": features.Location,
-            "use_latest": bool(use_latest),
-            "station_name": station_name,
-            "rain_probability": float(y_proba),
-            "predicted_rain": y_pred,
-        }
-        df_log = pd.DataFrame([row])
-        header = not PRED_LOG_PATH.exists()
-        df_log.to_csv(PRED_LOG_PATH, mode="a", header=header, index=False)
-    except Exception as exc:
-        print(f"Warning: failed to log prediction: {exc}")
-
-        # Best-effort logging of API predictions to CSV (append-only)
-    try:
-        PRED_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        row = {
-            "logged_at_utc": datetime.utcnow().isoformat(),
-            "target_date": str(features.Date),
-            "location": features.Location,
-            "use_latest": bool(use_latest),
-            "station_name": station_name,
-            "rain_probability": float(y_proba),
-            "predicted_rain": y_pred,
-        }
-        df_log = pd.DataFrame([row])
-        header = not PRED_LOG_PATH.exists()
-        df_log.to_csv(PRED_LOG_PATH, mode="a", header=header, index=False)
-    except Exception as exc:
-        print(f"Warning: failed to log prediction: {exc}")
-
-return PredictionResponse(rain_tomorrow=y_pred, rain_probability=float(y_proba))
-
+    return PredictionResponse(rain_tomorrow=y_pred, rain_probability=float(y_proba))
