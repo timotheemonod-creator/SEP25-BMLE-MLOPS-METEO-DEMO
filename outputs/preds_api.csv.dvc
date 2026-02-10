@@ -1,6 +1,0 @@
-outs:
-- md5: b00e9d9f0cd42b502523e208a44cef84
-  size: 1010
-  isexec: true
-  hash: md5
-  path: preds_api.csv

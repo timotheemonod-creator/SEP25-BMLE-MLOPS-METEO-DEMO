@@ -16,8 +16,8 @@ stages:
       isexec: true
     - path: src/training.py
       hash: md5
-      md5: 6f3985cba5d63fcc5bcc384d13d3b055
-      size: 2426
+      md5: 71e4dfc1e0d15d1c69639186ac591719
+      size: 2462
       isexec: true
     outs:
     - path: models/pipeline.joblib
