@@ -18,6 +18,7 @@ import numpy as np
 app = FastAPI(title="Meteo RainTomorrow API", version="0.1.1")
 
 MODEL_PATH = Path("models/pipeline.joblib")
+PRED_LOG_PATH = Path("outputs/preds_api.csv")
 load_dotenv()
 API_KEY = os.getenv("API_KEY")
 security = HTTPBearer()
@@ -226,5 +227,60 @@ def predict(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Model prediction error: {exc}") from exc
     y_pred = int(y_proba >= 0.5)
-    return PredictionResponse(rain_tomorrow=y_pred, rain_probability=float(y_proba))
+
+    # Best-effort logging of API predictions to CSV (append-only)
+    try:
+        PRED_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        row = {
+            "logged_at_utc": datetime.utcnow().isoformat(),
+            "target_date": str(features.Date),
+            "location": features.Location,
+            "use_latest": bool(use_latest),
+            "station_name": station_name,
+            "rain_probability": float(y_proba),
+            "predicted_rain": y_pred,
+        }
+        df_log = pd.DataFrame([row])
+        header = not PRED_LOG_PATH.exists()
+        df_log.to_csv(PRED_LOG_PATH, mode="a", header=header, index=False)
+    except Exception as exc:
+        print(f"Warning: failed to log prediction: {exc}")
+
+    # Best-effort logging of API predictions to CSV (append-only)
+    try:
+        PRED_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        row = {
+            "logged_at_utc": datetime.utcnow().isoformat(),
+            "target_date": str(features.Date),
+            "location": features.Location,
+            "use_latest": bool(use_latest),
+            "station_name": station_name,
+            "rain_probability": float(y_proba),
+            "predicted_rain": y_pred,
+        }
+        df_log = pd.DataFrame([row])
+        header = not PRED_LOG_PATH.exists()
+        df_log.to_csv(PRED_LOG_PATH, mode="a", header=header, index=False)
+    except Exception as exc:
+        print(f"Warning: failed to log prediction: {exc}")
+
+        # Best-effort logging of API predictions to CSV (append-only)
+    try:
+        PRED_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        row = {
+            "logged_at_utc": datetime.utcnow().isoformat(),
+            "target_date": str(features.Date),
+            "location": features.Location,
+            "use_latest": bool(use_latest),
+            "station_name": station_name,
+            "rain_probability": float(y_proba),
+            "predicted_rain": y_pred,
+        }
+        df_log = pd.DataFrame([row])
+        header = not PRED_LOG_PATH.exists()
+        df_log.to_csv(PRED_LOG_PATH, mode="a", header=header, index=False)
+    except Exception as exc:
+        print(f"Warning: failed to log prediction: {exc}")
+
+return PredictionResponse(rain_tomorrow=y_pred, rain_probability=float(y_proba))
 

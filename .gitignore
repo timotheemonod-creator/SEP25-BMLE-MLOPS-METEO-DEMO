@@ -23,7 +23,6 @@ build/
 # OS
 .DS_Store
 Thumbs.db
-/outputs
 
 models/pipeline.joblib
 mlflow.db
@@ -33,3 +32,9 @@ data/processed/
 data/raw/weatherAUS.csv
 scripts/env.local.sh
 env
+
+
+outputs/
+!outputs/
+!outputs/preds_api.csv.dvc
+logs/preds_api.csv
