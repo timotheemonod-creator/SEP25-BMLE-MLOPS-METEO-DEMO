@@ -39,3 +39,4 @@ logs/preds_api.csv
 outputs/*
 !outputs/preds_api.csv
 !outputs/preds_api.csv.dvc
+!outputs/.gitignore
