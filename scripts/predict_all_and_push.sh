@@ -23,8 +23,7 @@ for s in "${stations[@]}"; do
     "${API_URL}/predict?use_latest=true&station_name=${enc}" \
     -H "accept: application/json" \
     -H "$AUTH_HEADER" \
-    -H "Content-Type: application/json" \
-    -d '{}' >/dev/null
+    >/dev/null
 done
 
 echo "Updating DVC + Git..."
