@@ -1,0 +1,93 @@
+services:
+  api-inference:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: meteo-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./models:/app/models
+      - ./outputs:/app/outputs
+    restart: unless-stopped
+
+  mlflow-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ml
+    container_name: meteo-mlflow
+    command: ["mlflow", "server", "--backend-store-uri", "sqlite:///mlflow.db", "--default-artifact-root", "./mlruns", "--host", "0.0.0.0", "--port", "5000"]
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env.docker
+    volumes:
+      - ./mlruns:/app/mlruns
+      - ./mlflow.db:/app/mlflow.db
+    restart: unless-stopped
+
+  preprocess:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ml
+    container_name: meteo-preprocess
+    command: ["python", "-m", "src.data_preparation"]
+    env_file:
+      - .env.docker
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./metrics:/app/metrics
+      - ./outputs:/app/outputs
+      - ./mlruns:/app/mlruns
+    profiles: ["jobs"]
+
+  train:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ml
+    container_name: meteo-train
+    command: ["python", "-m", "src.training"]
+    env_file:
+      - .env.docker
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./metrics:/app/metrics
+      - ./outputs:/app/outputs
+      - ./mlruns:/app/mlruns
+    profiles: ["jobs"]
+
+  evaluate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ml
+    container_name: meteo-evaluate
+    command: ["python", "-m", "src.evaluation"]
+    env_file:
+      - .env.docker
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./metrics:/app/metrics
+      - ./outputs:/app/outputs
+      - ./mlruns:/app/mlruns
+    profiles: ["jobs"]
+
+  predict-batch:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ml
+    container_name: meteo-predict-batch
+    command: ["python", "-m", "src.predict_batch"]
+    env_file:
+      - .env.docker
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./metrics:/app/metrics
+      - ./outputs:/app/outputs
+      - ./mlruns:/app/mlruns
+    profiles: ["jobs"]
