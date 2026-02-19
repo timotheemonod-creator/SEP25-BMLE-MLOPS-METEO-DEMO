@@ -40,3 +40,6 @@ outputs/*
 !outputs/preds_api.csv
 !outputs/preds_api.csv.dvc
 !outputs/.gitignore
+
+.env.docker
+.env.docker.local

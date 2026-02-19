@@ -142,3 +142,21 @@ src/evaluation.py
 
 ### Schéma complet
 Voir `docs/architecture.md`.
+
+### Docker Compose (microservices sans Airflow)
+```bash
+cp .env.docker.example .env.docker
+docker compose up -d --build api-inference mlflow-server
+```
+
+UIs locales:
+- API Swagger: `http://127.0.0.1:8000/docs`
+- MLflow UI: `http://127.0.0.1:5000`
+
+Jobs ML one-shot:
+```bash
+docker compose run --rm preprocess
+docker compose run --rm train
+docker compose run --rm evaluate
+docker compose run --rm predict-batch
+```
