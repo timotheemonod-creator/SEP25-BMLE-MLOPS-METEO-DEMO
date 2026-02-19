@@ -45,10 +45,10 @@ Métriques suivies:
            |                            |                                              |
            |                            v                                              v
            |                 src/live_monitoring.py                          DVC (.dvc)
-           |                 src/combined_metrics.py                         + DagsHub
+           |                                                          + DagsHub
            |                            |
            |                            v
-           |         metrics/live_eval.json + metrics/combined_eval.json
+           |                     metrics/live_eval.json
            |                            |
            |                            v
            |                  Airflow: weather_main_dag
@@ -61,7 +61,7 @@ Métriques suivies:
            |   skip_optuna                        trigger_optuna -> optuna_tuning_dag
            |                                                        |
            |                                                        v
-           |                              optimisations/optuna_search_recall_small.py
+           |                              optimisations/prod/optuna_search_recall_small.py
            |                                                        |
            |                         +------------------------------+-------------------+
            |                         |                                                  |
@@ -105,26 +105,38 @@ Métriques suivies:
 |- metrics/
 |  |- eval.json
 |  |- live_eval.json
-|  |- combined_eval.json
 |  `- retrain_watermark.json
 |- models/
 |  |- pipeline.joblib
 |  `- best_params.json
 |- optimisations/
-|  |- optuna_search_recall_small.py
-|  `- optuna_xgb_recall_small.db
+|  |- prod/
+|  |  `- optuna_search_recall_small.py
+|  |- research/
+|  |  |- benchmark_models.py
+|  |  |- lazyml_search.py
+|  |  `- optuna_search.py
+|  |- optuna_xgb_recall_small.db
+|  `- README.md
 |- outputs/
 |  |- preds_api.csv
 |  |- preds_api.csv.dvc
 |  `- preds_api_scored.csv
 |- scripts/
-|  `- predict_all_and_push.sh
+|  |- predict_all_and_push.sh
+|  `- ensure_mlflow_env.sh
+|- legacy/
+|  `- scripts/
+|     |- preprocess.sh
+|     |- train.sh
+|     |- evaluate.sh
+|     |- predict.sh
+|     `- cron.txt
 |- src/
 |  |- data_preparation.py
 |  |- training.py
 |  |- evaluation.py
 |  |- live_monitoring.py
-|  |- combined_metrics.py
 |  `- retrain_dataset_builder.py
 |- tests/
 |  `- test_health.py
@@ -133,6 +145,8 @@ Métriques suivies:
 |- docker-compose.yml
 |- docker-compose.airflow.yml
 |- dvc.yaml
+|- requirements.in
+|- requirements-dev.in
 |- streamlit_app.py
 `- README.md
 ```
@@ -160,7 +174,6 @@ Dans Airflow:
 
 Dans les fichiers de métriques:
 - `metrics/live_eval.json`: métriques live sur prédictions scorées,
-- `metrics/combined_eval.json`: métriques historique + live,
 - `metrics/retrain_watermark.json`: point de consommation des nouvelles données après retrain/optuna.
 
 ## 6) Pipelines applicatifs
@@ -177,7 +190,6 @@ Dans les fichiers de métriques:
 2. `src.live_monitoring` enrichit en vérité observée BOM et produit:
    - `outputs/preds_api_scored.csv`,
    - `metrics/live_eval.json`.
-3. `src.combined_metrics` produit `metrics/combined_eval.json`.
 
 ### 6.3 Pipeline dataset de retrain
 
@@ -199,11 +211,10 @@ Planification:
 Enchaînement des tasks:
 1. `predict_all_and_push`
 2. `compute_live_metrics`
-3. `compute_combined_metrics`
-4. `read_quality_metrics`
-5. `branch_on_recall`
-6. `trigger_optuna` ou `skip_optuna`
-7. `join_after_branch`
+3. `read_quality_metrics`
+4. `branch_on_recall`
+5. `trigger_optuna` ou `skip_optuna`
+6. `join_after_branch`
 
 Règle de décision:
 - Déclencher Optuna si et seulement si:
@@ -223,7 +234,10 @@ Enchaînement des tasks:
    - lance Optuna sur `data/processed/weatherAUS_retrain.csv`.
 2. `save_best_params`
    - exporte les meilleurs hyperparamètres dans `models/best_params.json`.
-3. `mark_retrain_consumed`
+3. `retrain_with_best`
+   - réentraîne un modèle complet sur `weatherAUS_retrain.csv` avec les meilleurs paramètres,
+   - remplace `models/pipeline.joblib` (modèle actif API).
+4. `mark_retrain_consumed`
    - met à jour `metrics/retrain_watermark.json` avec la dernière `feature_date` consommée.
 
 Effet du watermark:
@@ -236,7 +250,6 @@ Effet du watermark:
 weather_main_dag
   -> predict_all_and_push
   -> compute_live_metrics
-  -> compute_combined_metrics
   -> read_quality_metrics
        lit recall_live + new_rows_for_retrain
        avec cutoff = max(max_hist_date, watermark)
@@ -255,6 +268,48 @@ Table de comportements:
 - Cas C: `new_rows` suffisant, recall faible -> Optuna déclenché.
 - Cas D: Optuna terminé avec succès -> watermark mis à jour, `new_rows` retombe.
 
+## 7.4 Sorties des DAGs: fichiers, XCom, consommateurs
+
+### `weather_main_dag`
+
+| Task | Sortie | Type | Consommé par | But |
+|---|---|---|---|---|
+| `ensure_latest_model` | `return_value` (chemin modèle, mtime, metadata) | XCom | Diagnostic Airflow / debug | Vérifier qu'un modèle actif existe avant prédiction |
+| `predict_all_and_push` | `outputs/preds_api.csv` | CSV | `src.live_monitoring`, CI (`publish_preds.yml`), Streamlit | Journal brut des prédictions API |
+| `compute_live_metrics` | `outputs/preds_api_scored.csv` | CSV | `src.retrain_dataset_builder`, Streamlit | Prédictions enrichies avec vérité observée (`truth_available`, `y_true`, `feature_date`) |
+| `compute_live_metrics` | `metrics/live_eval.json` | JSON | `read_quality_metrics`, Streamlit | Qualité live (accuracy/precision/recall/f1/roc_auc) |
+| `read_quality_metrics` | `return_value` (`live`, `new_rows_for_retrain`, `retrain_cutoff_date`) | XCom | `branch_on_recall` | Centraliser les signaux de décision |
+| `branch_on_recall` | branche cible (`trigger_optuna` ou `skip_optuna`) | XCom interne de branchement | Airflow (scheduler) | Appliquer la règle métier |
+
+### `optuna_tuning_dag`
+
+| Task | Sortie | Type | Consommé par | But |
+|---|---|---|---|---|
+| `run_optuna` | `data/processed/weatherAUS_retrain.csv` | CSV | `optimisations/prod/optuna_search_recall_small.py`, `retrain_with_best` | Dataset retrain = historique + nouvelles lignes labellisées |
+| `run_optuna` | `metrics/retrain_dataset_meta.json` | JSON | Opérations / debug | Vérifier `historical_rows`, `added_rows`, `total_rows` |
+| `run_optuna` | `optimisations/optuna_xgb_recall_small.db` | SQLite DB | `save_best_params` | Historique complet des trials Optuna |
+| `save_best_params` | `models/best_params.json` | JSON | `retrain_with_best`, Streamlit (explication) | Publier les meilleurs hyperparamètres |
+| `retrain_with_best` | `models/pipeline.joblib` | Binaire modèle | API `/predict`, `ensure_latest_model` | Activer le dernier modèle retrainé |
+| `retrain_with_best` | `models/model_metadata.json` | JSON | `ensure_latest_model`, audit | Traçabilité du modèle entraîné (date, params, rows) |
+| `mark_retrain_consumed` | `metrics/retrain_watermark.json` | JSON | `read_quality_metrics` (dans DAG principal) | Empêcher de recompter le même lot de lignes live |
+
+### Exemple de payload XCom clé (`read_quality_metrics`)
+
+```json
+{
+  "live": {
+    "recall_live": 0.4193,
+    "scored_rows": 138
+  },
+  "new_rows_for_retrain": 0,
+  "retrain_cutoff_date": "2026-02-18"
+}
+```
+
+Interprétation:
+- `branch_on_recall` décide à partir de ce payload.
+- Si `new_rows_for_retrain < MIN_NEW_ROWS_FOR_RETRAIN`, Optuna est skip même si le recall live est faible.
+
 ## 8) Installation et démarrage
 
 ## 8.1 Pré-requis
@@ -271,6 +326,18 @@ python -m venv .venv_meteo
 source .venv_meteo/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+```
+
+Stratégie dépendances (recommandée):
+- `requirements.in`: dépendances runtime minimales maintenues à la main.
+- `requirements-dev.in`: dépendances de dev/test.
+- `requirements.txt`: lock actuel (historique) encore supporté pour compatibilité.
+
+Compilation lock (optionnelle, pip-tools):
+```bash
+python -m pip install pip-tools
+pip-compile requirements.in -o requirements.txt
+pip-compile requirements-dev.in -o requirements-dev.txt
 ```
 
 Si Streamlit est manquant:

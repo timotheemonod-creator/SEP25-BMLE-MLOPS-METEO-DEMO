@@ -102,7 +102,7 @@ with DAG(
             f"cd {PROJECT_ROOT} && "
             f"PYTHONPATH={PROJECT_ROOT} python -m src.retrain_dataset_builder && "
             f"PYTHONPATH={PROJECT_ROOT} OPTUNA_RAW_PATH=data/processed/weatherAUS_retrain.csv "
-            f"python optimisations/optuna_search_recall_small.py"
+            f"python optimisations/prod/optuna_search_recall_small.py"
         ),
     )
 
@@ -111,9 +111,19 @@ with DAG(
         python_callable=export_best_params,
     )
 
+    retrain_with_best = BashOperator(
+        task_id="retrain_with_best",
+        bash_command=(
+            f"cd {PROJECT_ROOT} && "
+            f"PYTHONPATH={PROJECT_ROOT} RETRAIN_RAW_PATH=data/processed/weatherAUS_retrain.csv "
+            f"BEST_PARAMS_PATH=models/best_params.json MODEL_PATH=models/pipeline.joblib "
+            f"MODEL_META_PATH=models/model_metadata.json python -m src.retrain_with_best_params"
+        ),
+    )
+
     mark_retrain_consumed = PythonOperator(
         task_id="mark_retrain_consumed",
         python_callable=update_retrain_watermark,
     )
 
-    run_optuna >> save_best_params >> mark_retrain_consumed
+    run_optuna >> save_best_params >> retrain_with_best >> mark_retrain_consumed

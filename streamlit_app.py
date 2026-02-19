@@ -2,7 +2,6 @@
 
 import json
 import os
-import subprocess
 import textwrap
 import csv
 from datetime import datetime
@@ -133,15 +132,15 @@ div[data-testid="metric-container"] label {
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 LIVE_METRICS_PATH = PROJECT_ROOT / "metrics" / "live_eval.json"
-COMBINED_METRICS_PATH = PROJECT_ROOT / "metrics" / "combined_eval.json"
 PREDS_PATH = PROJECT_ROOT / "outputs" / "preds_api.csv"
 SCORED_PREDS_PATH = PROJECT_ROOT / "outputs" / "preds_api_scored.csv"
 EVAL_PATH = PROJECT_ROOT / "metrics" / "eval.json"
-OPTUNA_SCRIPT = PROJECT_ROOT / "optimisations" / "optuna_search_recall_small.py"
 MIN_NEW_ROWS_FOR_RETRAIN = int(os.getenv("MIN_NEW_ROWS_FOR_RETRAIN", "60"))
-
-INSPIRATION_ODP = Path(r"C:\Users\timot\Downloads\Présentation_MLOPS_Analyse_des_sentiments.odp")
-INSPIRATION_PDF = Path(r"C:\Users\timot\Downloads\parivision_presentation.pdf")
+ASSETS_DIR = PROJECT_ROOT / "assets" / "slides"
+IMG_AIRFLOW_MAIN = ASSETS_DIR / "airflow_weather_main_graph.png"
+IMG_AIRFLOW_OPTUNA = ASSETS_DIR / "airflow_optuna_graph.png"
+IMG_DVC_PIPELINE = ASSETS_DIR / "dvc_pipeline_graph.png"
+IMG_MLFLOW_RUNS = ASSETS_DIR / "mlflow_runs.png"
 
 STATIONS = [
     "Adelaide", "Albany", "Albury-Wodonga", "Alice Springs", "Ballarat", "Bendigo", "Brisbane",
@@ -228,23 +227,6 @@ def _api_request(api_url: str, api_key: str, station: str) -> dict[str, Any]:
     return payload
 
 
-def _run_optuna_demo(timeout_seconds: int) -> tuple[int, str]:
-    cmd = ["python", str(OPTUNA_SCRIPT)]
-    try:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(PROJECT_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
-        return proc.returncode, (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
-    except subprocess.TimeoutExpired as e:
-        out = (e.stdout or "") + ("\n" + e.stderr if e.stderr else "")
-        return 124, f"Arret automatique apres {timeout_seconds}s (mode demo).\n\n{out}"
-
-
 def _render_schema(title: str, schema_text: str) -> None:
     st.markdown(f"<div class='panel'><h4>{title}</h4></div>", unsafe_allow_html=True)
     st.markdown("<div class='schema-box'>", unsafe_allow_html=True)
@@ -252,169 +234,236 @@ def _render_schema(title: str, schema_text: str) -> None:
     st.markdown("</div>", unsafe_allow_html=True)
 
 
+def _render_visual_evidence(slide_title: str) -> None:
+    if slide_title.startswith("2. Phase 1"):
+        st.markdown("<div class='panel'><h4>Preuve visuelle: pipeline de données (DVC)</h4></div>", unsafe_allow_html=True)
+        if IMG_DVC_PIPELINE.exists():
+            st.image(
+                str(IMG_DVC_PIPELINE),
+                caption=(
+                    "Vue DVC: elle montre le flux complet données -> preprocessing -> entraînement -> évaluation "
+                    "et les artefacts suivis."
+                ),
+                use_container_width=True,
+            )
+        else:
+            st.info(
+                "Image manquante: ajoutez `assets/slides/dvc_pipeline_graph.png` pour afficher la vue DVC dans cette slide."
+            )
+
+    if slide_title.startswith("4. Phase 2"):
+        st.markdown("<div class='panel'><h4>Preuve visuelle: suivi des expériences MLflow</h4></div>", unsafe_allow_html=True)
+        if IMG_MLFLOW_RUNS.exists():
+            st.image(
+                str(IMG_MLFLOW_RUNS),
+                caption=(
+                    "Vue MLflow des runs: comparaison des entraînements/évaluations et des runs Optuna, "
+                    "avec leurs métriques et durées."
+                ),
+                use_container_width=True,
+            )
+        else:
+            st.info(
+                "Image manquante: ajoutez `assets/slides/mlflow_runs.png`."
+            )
+
+    if slide_title.startswith("6. DAGs"):
+        st.markdown("<div class='panel'><h4>Preuve visuelle: graphes Airflow</h4></div>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            if IMG_AIRFLOW_MAIN.exists():
+                st.image(
+                    str(IMG_AIRFLOW_MAIN),
+                    caption=(
+                        "DAG principal: prédiction -> métriques live -> branche de décision "
+                        "(trigger_optuna ou skip_optuna)."
+                    ),
+                    use_container_width=True,
+                )
+            else:
+                st.info(
+                    "Image manquante: ajoutez `assets/slides/airflow_weather_main_graph.png`."
+                )
+        with c2:
+            if IMG_AIRFLOW_OPTUNA.exists():
+                st.image(
+                    str(IMG_AIRFLOW_OPTUNA),
+                    caption=(
+                        "DAG Optuna: run_optuna -> save_best_params -> retrain_with_best -> mark_retrain_consumed "
+                        "(watermark pour éviter de retraiter les mêmes lignes)."
+                    ),
+                    use_container_width=True,
+                )
+            else:
+                st.info(
+                    "Image manquante: ajoutez `assets/slides/airflow_optuna_graph.png`."
+                )
+
+
 def _slide_payload() -> list[dict[str, Any]]:
     return [
         {
-            "title": "Slide 1 - Cadrage: le probleme que nous resolvons",
-            "context": "Notre objectif est simple: aider a anticiper la pluie du lendemain sur 36 stations pour mieux planifier les operations.",
+            "title": "1. Le projet météo: vision d'ensemble",
+            "context": "Le projet transforme un besoin métier simple en système décisionnel: anticiper la pluie du lendemain pour aider la planification terrain.",
             "done": [
-                "Le besoin metier a ete formalise: reduire les surprises liees a la pluie.",
-                "Nous avons defini des indicateurs lisibles pour suivre la qualite du modele.",
-                "Une regle de decision a ete fixee: si la qualite baisse, on relance l'amelioration automatiquement.",
+                "Cas d'usage clarifié: prévoir RainTomorrow sur des stations australiennes.",
+                "Attentes fonctionnelles formalisées: prédire, exposer la prédiction, suivre la qualité dans le temps.",
+                "Objectif MLOps posé dès le début: un pipeline reproductible, observable et automatisable.",
+                "Métrique clé choisie: recall en priorité, complétée par precision, f1, roc_auc et accuracy.",
+                "Stack outillée: Python ML, FastAPI, MLflow, DVC/DagsHub, Airflow, Docker, Streamlit.",
             ],
             "choices": [
-                "Le recall est prioritaire: manquer un vrai jour de pluie coute plus cher qu'une fausse alerte.",
-                "Plusieurs metriques sont combinees pour eviter les conclusions trompeuses.",
-                "Une regle claire permet d'expliquer facilement les decisions au jury et aux operations.",
+                "Le recall est prioritaire car rater un vrai épisode de pluie est plus coûteux qu'une fausse alerte.",
+                "La combinaison de métriques évite de juger le modèle sur un seul angle.",
+                "Le choix des outils suit une logique de complémentarité: développer, servir, monitorer, automatiser.",
             ],
             "schema": """
-Besoin metier -> Indicateurs de qualite -> Decision automatique
-      |                 |                        |
-      |                 |                        +--> Re-optimiser si performance insuffisante
-      |                 +--> recall, precision, f1, roc_auc, accuracy
-      +--> Predire la pluie du lendemain
+Besoin métier (anticiper la pluie J+1)
+          |
+          v
+Objectifs techniques (prédire + suivre + automatiser)
+          |
+          v
+Indicateurs de qualité (recall, precision, f1, roc_auc, accuracy)
 """,
         },
         {
-            "title": "Slide 2 - Phase 1: donner des bases solides au projet",
-            "context": "Avant d'optimiser, nous avons construit un premier cycle complet: donnees -> modele -> evaluation.",
+            "title": "2. Phase 1: Fondations et conteneurisation",
+            "context": "Cette phase construit le socle data/model. Le principe: d'abord fiabiliser les données, puis établir une baseline measurable.",
             "done": [
-                "Les donnees ont ete recuperees, nettoyees et harmonisees.",
-                "Les variables utiles ont ete preparees pour simplifier l'apprentissage.",
-                "Un premier modele de reference a ete entraine.",
-                "Les performances ont ete mesurees sur des donnees non vues.",
+                "Collecte des données depuis les sources du projet et chargement dans des scripts Python.",
+                "Nettoyage: gestion des manquants, valeurs aberrantes, cohérence de type.",
+                "Feature engineering: transformation temporelle et prétraitements utiles au modèle.",
+                "Entraînement d'un modèle de base pour obtenir un point de comparaison.",
+                "Évaluation offline avec un set de métriques interprétable par l'équipe.",
             ],
             "choices": [
-                "Commencer par une baseline evite de perdre du temps sur de l'optimisation prematuree.",
-                "Un pipeline standard rend les executions reproductibles et compréhensibles.",
+                "Une baseline permet de mesurer l'apport réel des optimisations ultérieures.",
+                "Un prétraitement propre en amont réduit les erreurs en production.",
             ],
             "schema": """
-Donnees brutes -> Preparation -> Entrainement -> Modele initial
-                               -> Evaluation -> Metriques de reference
+Collecte -> Nettoyage -> Feature engineering -> Entraînement baseline -> Évaluation
+                        (pipeline data robuste)
 """,
         },
         {
-            "title": "Slide 3 - API: transformer le modele en service utilisable",
-            "context": "Le modele n'est utile que s'il est accessible facilement: l'API permet cette mise en production.",
+            "title": "3. API d'inférence (FastAPI)",
+            "context": "Le modèle devient un service actionnable: il peut être appelé en temps réel, testé et supervisé.",
             "done": [
-                "Un endpoint de prediction a ete cree pour interroger le modele en direct.",
-                "Un endpoint de sante confirme rapidement que le service fonctionne.",
-                "Une cle API protege les appels.",
-                "Chaque prediction est enregistree pour assurer la tracabilite.",
+                "Création de l'endpoint `/predict` pour produire une prédiction sur demande.",
+                "Chargement du modèle entraîné via artefact sérialisé (joblib), sans ré-entraînement.",
+                "Endpoint `/health` pour vérifier rapidement la disponibilité du service.",
+                "Tests manuels via Swagger UI et requêtes HTTP (curl).",
+                "Journalisation des prédictions pour le monitoring et la traçabilité.",
             ],
             "choices": [
-                "FastAPI facilite les tests, la documentation et la maintenance.",
-                "Le mode 'use_latest' rend la demo fluide sans manipulations complexes.",
+                "FastAPI apporte une doc interactive immédiate, utile pour la démo et le debug.",
+                "La séparation API/modèle facilite les évolutions sans casser le service.",
             ],
             "schema": """
-Utilisateur -> API /predict -> Modele charge en memoire
-           -> Reponse immediate (pluie oui/non + probabilite)
-           -> Journalisation pour suivi et audit
+Client -> /predict -> pipeline.joblib chargé en mémoire -> prédiction
+     -> /health  -> validation rapide du service
+     -> Swagger  -> test et documentation
 """,
         },
         {
-            "title": "Slide 4 - Phase 2: suivi des essais et versioning des donnees",
-            "context": "Nous avons outille le projet pour savoir ce qui a ete teste, pourquoi, et avec quels resultats.",
+            "title": "4. Phase 2: Microservices, suivi et versioning",
+            "context": "Cette phase rend le projet gouvernable: on suit les expériences, on versionne les données et on fiabilise l'API.",
             "done": [
-                "Chaque entrainement est historise avec ses parametres et ses metriques.",
-                "Les fichiers de predictions sont versions avec DVC/DagsHub.",
-                "Des tests simples verifient que les fonctions critiques restent stables.",
+                "Tracking MLflow des runs: paramètres, métriques, artefacts.",
+                "Comparaison des essais pour choisir les configurations utiles.",
+                "Versioning data/artefacts avec DVC et stockage distant DagsHub.",
+                "Renforcement API: tests unitaires et authentification par token.",
             ],
             "choices": [
-                "MLflow permet de comparer objectivement les essais.",
-                "DVC complete Git pour suivre proprement les fichiers data.",
+                "MLflow donne une mémoire expérimentale exploitable par toute l'équipe.",
+                "DVC complète Git pour les fichiers volumineux et la reproductibilité.",
             ],
             "schema": """
-Experiences modele -> Historique MLflow
-Predictions produites -> DVC -> Stockage DagsHub
+Entraînements -> MLflow (runs comparables)
+Prédictions/datasets -> DVC -> DagsHub
+Code/config -> Git
 """,
         },
         {
-            "title": "Slide 5 - Phase 3: orchestration quotidienne avec Airflow",
-            "context": "Le pipeline tourne automatiquement deux fois par jour et verifie si le modele reste fiable.",
+            "title": "5. Phase 3: Orchestration et déploiement",
+            "context": "Airflow automatise la chaîne métier: produire, mesurer, puis décider s'il faut relancer une optimisation.",
             "done": [
-                "Un DAG principal gere les predictions et les controles qualite.",
-                "Un DAG dedie a l'optimisation est lance seulement si necessaire.",
-                "Les metriques sont recalculees a chaque execution.",
+                "Mises à jour automatisées du cycle prédiction -> monitoring -> décision.",
+                "Récupération et traitement automatiques des données live via scripts orchestrables.",
+                "Découpage en microservices: API, tracking, orchestration, jobs ML.",
+                "Conteneurisation des services (Dockerfiles dédiés API/Airflow/MLflow).",
+                "Connexion des services avec Docker Compose.",
             ],
             "choices": [
-                "Separer les DAGs clarifie la lecture et limite les risques.",
-                "Le retrain est conditionne pour eviter des reactions trop rapides sur peu de donnees.",
+                "Le découpage par service isole les responsabilités et simplifie les dépannages.",
+                "L'orchestration conditionnelle évite des retrains inutiles.",
             ],
             "schema": """
-weather_main_dag (06:00, 18:00)
-  1) Predire
-  2) Evaluer la qualite recente
-  3) Decider: optimiser ou continuer tel quel
+Docker Compose
+  |- FastAPI (inférence)
+  |- MLflow (tracking)
+  |- Airflow (orchestration)
+  |- Postgres Airflow (metadata)
 """,
         },
         {
-            "title": "Slide 6 - Architecture: une application decoupee par role",
-            "context": "Chaque composant a une responsabilite claire pour simplifier l'exploitation et les evolutions.",
+            "title": "6. DAGs + architecture outillage (logique et contraintes)",
+            "context": "Cette slide assemble la logique décisionnelle complète: quand Optuna part, quand il ne part pas, et comment les outils se complètent.",
             "done": [
-                "Les services ont ete conteneurises (API, orchestration, suivi des experiences).",
-                "Airflow s'appuie sur une base dediee pour son fonctionnement.",
-                "Docker Compose demarre l'ensemble en une commande.",
+                "DAG principal `weather_main_dag`: prédiction, scoring live, branche conditionnelle.",
+                "Condition Optuna: recall_live < seuil ET new_rows_for_retrain >= seuil minimal.",
+                "DAG `optuna_tuning_dag`: build dataset retrain -> optuna -> export best params -> retrain modèle -> maj watermark.",
+                "Watermark retrain: évite de relancer Optuna sur les mêmes nouvelles lignes déjà consommées.",
+                "Architecture complète relie API, monitoring, orchestration, versioning et tracking.",
             ],
             "choices": [
-                "Le decoupage limite les effets de bord quand on fait evoluer un composant.",
-                "Compose rend la demo reproductible sur une machine propre.",
+                "Le watermark stabilise la logique métier dans le temps.",
+                "Les contraintes explicites rendent la décision audit-able et présentable au jury.",
             ],
             "schema": """
-[Interface demo] -> [API prediction] -> [Fichiers de suivi]
-        |                   |                   |
-        |                   +--> [Modele]       +--> [DVC / DagsHub]
-        +--> [Airflow] ----> Jobs planifies ----> [Metriques + MLflow]
+weather_main_dag
+  predict_all_and_push
+    -> compute_live_metrics
+    -> read_quality_metrics
+    -> branch_on_recall
+         if new_rows < MIN_NEW_ROWS_FOR_RETRAIN: skip_optuna
+         else if recall_live < RECALL_THRESHOLD: trigger_optuna
+         else: skip_optuna
+
+optuna_tuning_dag
+  run_optuna (dataset retrain + recherche)
+    -> save_best_params
+    -> retrain_with_best
+    -> mark_retrain_consumed (watermark)
+
+Architecture outils:
+  Streamlit -> FastAPI -> outputs/preds_api.csv -> live_monitoring
+                         -> metrics -> Airflow décision
+  MLflow <-> training/optuna
+  DVC + DagsHub <-> versioning data/artefacts
 """,
         },
         {
-            "title": "Slide 7 - CI: automatiser les taches repetitives",
-            "context": "Une partie du travail de publication est automatisee pour limiter les oublis manuels.",
+            "title": "7. Outro: prochaines evolutions possibles",
+            "context": "Le socle est en place. La suite vise surtout la robustesse de production, l'observabilité et l'opération à plus grande échelle.",
             "done": [
-                "Un workflow GitHub Actions publie les nouvelles predictions.",
-                "Le fichier est suivi avec DVC puis pousse vers DagsHub.",
-                "Les identifiants sont stockes de maniere securisee via GitHub Secrets.",
+                "Ajouter une couche Nginx (reverse proxy, TLS, routage).",
+                "Mettre en place Prometheus + Grafana pour monitorer API, DAGs et métriques métier.",
+                "Ajouter des alertes automatiques (latence API, baisse recall, échec DAG).",
+                "Industrialiser davantage la CI/CD (tests, build images, déploiement contrôlé).",
+                "Approfondir le monitoring data/model: drift, calibration, analyses par station.",
             ],
             "choices": [
-                "Automatiser reduit la charge operative et les erreurs humaines.",
-                "Un workflow visible facilite l'audit et la reprise par un autre membre d'equipe.",
+                "Ces briques transforment un bon POC en plateforme exploitable en continu.",
+                "La priorité est de garder une systémique simple, observable et explicable.",
             ],
             "schema": """
-GitHub Actions -> versionne les predictions -> publie sur DagsHub
-""",
-        },
-        {
-            "title": "Slide 8 - Monitoring: verifier la qualite en continu",
-            "context": "Nous comparons la qualite initiale et la qualite en conditions reelles pour agir au bon moment.",
-            "done": [
-                "Les metriques live sont calculees sur les observations recentes.",
-                "Une vue combinee melange historique + donnees recentes.",
-                "La decision d'optimisation suit une regle explicite (qualite + volume minimal).",
-            ],
-            "choices": [
-                "Le live reflète la realite terrain, donc c'est le signal principal.",
-                "La vue combinee donne du recul et evite les decisions basees sur du bruit court terme.",
-            ],
-            "schema": """
-Predictions + donnees reelles -> Metriques live
-Historique + live -> Metriques combinees
-Metriques -> Decision automatique de retrain
-""",
-        },
-        {
-            "title": "Slide 9 - Conclusion: preuve, limites et prochaines etapes",
-            "context": "La soutenance montre un systeme fonctionnel, explicable, et pret a etre ameliore de maniere progressive.",
-            "done": [
-                "L'application Streamlit combine explication du projet et demonstration live.",
-                "Un mode demo d'optimisation court garantit une presentation fluide.",
-                f"Des inspirations visuelles ont ete prises dans {INSPIRATION_ODP.name} et {INSPIRATION_PDF.name}.",
-            ],
-            "choices": [
-                "Le fil narratif suit une logique simple: besoin -> solution -> preuve -> suite.",
-                "La roadmap vise surtout la robustesse: calibration, drift et analyses par station.",
-            ],
-            "schema": """
-Slides claires -> Demo en direct -> Questions du jury
+Aujourd'hui:
+  pipeline opérationnel et orchestré
+
+Demain:
+  Nginx + Prometheus + Grafana + alerting + CI/CD renforcée
 """,
         },
     ]
@@ -424,8 +473,8 @@ def _slides_view() -> None:
     st.markdown(
         """
 <div class="hero">
-  <h2 style="margin:0;">Soutenance MLOps Meteo</h2>
-  <p>Mode presentation: 1 slide par page, contenu pedagogique, schemas techniques.</p>
+  <h2 style="margin:0;">Soutenance MLOps Météo</h2>
+  <p>Mode présentation: 1 slide par page, contenu pédagogique, schémas techniques.</p>
 </div>
 """,
         unsafe_allow_html=True,
@@ -440,7 +489,7 @@ def _slides_view() -> None:
 
     col_prev, col_mid, col_next = st.columns([1, 2, 1])
     with col_prev:
-        if st.button("⬅️ Precedente", use_container_width=True):
+        if st.button("⬅️ Précédente", use_container_width=True):
             st.session_state.slide_idx = max(0, st.session_state.slide_idx - 1)
     with col_mid:
         labels = [f"{i+1:02d}. {s['title']}" for i, s in enumerate(slides)]
@@ -466,7 +515,7 @@ def _slides_view() -> None:
 
     c1, c2 = st.columns([1.1, 1])
     with c1:
-        st.markdown("<div class='panel'><h4>Ce qui a ete fait</h4></div>", unsafe_allow_html=True)
+        st.markdown("<div class='panel'><h4>Ce qui a été fait</h4></div>", unsafe_allow_html=True)
         for item in slide["done"]:
             st.markdown(f"- {item}")
     with c2:
@@ -475,32 +524,14 @@ def _slides_view() -> None:
             st.markdown(f"- {item}")
 
     _render_schema("Schema explicatif", slide["schema"])
-
-    if idx == total - 1:
-        st.divider()
-        a, b = st.columns(2)
-        with a:
-            st.write(f"ODP inspiration: `{INSPIRATION_ODP}`")
-            if INSPIRATION_ODP.exists():
-                with open(INSPIRATION_ODP, "rb") as f:
-                    st.download_button("Telecharger ODP inspiration", f, file_name=INSPIRATION_ODP.name)
-            else:
-                st.info("ODP non accessible depuis cet environnement.")
-        with b:
-            st.write(f"PDF inspiration: `{INSPIRATION_PDF}`")
-            if INSPIRATION_PDF.exists():
-                with open(INSPIRATION_PDF, "rb") as f:
-                    st.download_button("Telecharger PDF inspiration", f, file_name=INSPIRATION_PDF.name)
-            else:
-                st.info("PDF non accessible depuis cet environnement.")
-
+    _render_visual_evidence(slide["title"])
 
 def _live_demo_view() -> None:
     st.markdown(
         """
 <div class="hero">
   <h2 style="margin:0;">Demo live du projet</h2>
-  <p>Validation en direct: API, batch 36 stations, monitoring des metriques, test Optuna en mode soutenance.</p>
+  <p>Validation en direct: API, batch 36 stations, monitoring des métriques.</p>
 </div>
 """,
         unsafe_allow_html=True,
@@ -513,12 +544,12 @@ def _live_demo_view() -> None:
         f"Decision actuelle: Optuna si recall < 0.59 ET nouvelles lignes retrain >= {MIN_NEW_ROWS_FOR_RETRAIN}"
     )
 
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["1) Sante & prediction API", "2) Batch 36 stations", "3) Monitoring metriques", "4) Optuna mode demo"]
+    tab1, tab2, tab3 = st.tabs(
+        ["1) Santé & prédiction API", "2) Batch 36 stations", "3) Monitoring métriques"]
     )
 
     with tab1:
-        st.subheader("Test sante API")
+        st.subheader("Test santé API")
         if st.button("Appeler /health"):
             try:
                 resp = requests.get(f"{api_url.rstrip('/')}/health", timeout=15)
@@ -534,14 +565,14 @@ def _live_demo_view() -> None:
             else:
                 try:
                     result = _api_request(api_url, api_key, station)
-                    st.success("Prediction realisee.")
+                    st.success("Prédiction réalisée.")
                     st.json(result)
                 except Exception as e:
                     st.error(f"Erreur prediction: {e}")
 
     with tab2:
         st.subheader("Batch 36 stations (via API)")
-        st.caption("Ce bouton declenche 36 appels API successifs.")
+        st.caption("Ce bouton déclenche 36 appels API successifs.")
         if st.button("Lancer batch API (36 stations)"):
             if not api_key:
                 st.warning("Renseigne API KEY dans la sidebar.")
@@ -558,14 +589,11 @@ def _live_demo_view() -> None:
 
     with tab3:
         live_metrics = _load_json(LIVE_METRICS_PATH)
-        combined_metrics = _load_json(COMBINED_METRICS_PATH)
         offline_metrics = _load_json(EVAL_PATH)
 
-        _show_metric_cards(live_metrics, "Metriques live")
+        _show_metric_cards(live_metrics, "Métriques live")
         st.divider()
-        _show_metric_cards(combined_metrics, "Metriques combinees (historique + live)")
-        st.divider()
-        _show_metric_cards(offline_metrics, "Metriques offline")
+        _show_metric_cards(offline_metrics, "Métriques offline")
 
         st.subheader("Apercu des fichiers de suivi")
         c1, c2 = st.columns(2)
@@ -584,29 +612,12 @@ def _live_demo_view() -> None:
             else:
                 st.info("`outputs/preds_api_scored.csv` introuvable.")
 
-    with tab4:
-        st.subheader("Optuna mode demonstration")
-        st.caption("Execution limitee a 10 secondes pour soutenance.")
-        timeout_seconds = st.slider("Timeout (secondes)", min_value=5, max_value=30, value=10, step=1)
-        if st.button("Lancer Optuna en mode demo"):
-            if not OPTUNA_SCRIPT.exists():
-                st.error(f"Script introuvable: {OPTUNA_SCRIPT}")
-            else:
-                code, logs = _run_optuna_demo(timeout_seconds)
-                if code == 0:
-                    st.success("Optuna termine dans la fenetre de demo.")
-                elif code == 124:
-                    st.warning("Optuna arrete automatiquement (timeout demo).")
-                else:
-                    st.error(f"Optuna a echoue (code {code}).")
-                st.code(logs[-8000:] if logs else "Aucune sortie.", language="text")
-
 
 def main() -> None:
     _apply_premium_theme()
     st.sidebar.title("Navigation")
     page = st.sidebar.radio("Choisir une vue", ["Slides projet", "Demo live"])
-    st.sidebar.caption(f"Derniere mise a jour: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    st.sidebar.caption(f"Dernière mise à jour: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     if page == "Slides projet":
         _slides_view()

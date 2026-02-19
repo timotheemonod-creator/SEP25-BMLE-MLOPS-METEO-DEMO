@@ -1,0 +1,21 @@
+﻿# Runtime minimal (à compiler via pip-tools)
+fastapi
+uvicorn
+pydantic
+python-dotenv
+requests
+
+numpy
+pandas
+scikit-learn
+imbalanced-learn
+xgboost
+joblib
+
+mlflow
+optuna
+
+dvc[s3]
+dvc-ssh
+
+streamlit

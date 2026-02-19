@@ -15,10 +15,11 @@ PROJECT_ROOT = os.getenv("PROJECT_ROOT", "/opt/airflow/project")
 RECALL_THRESHOLD = float(os.getenv("RECALL_THRESHOLD", "0.59"))
 MIN_NEW_ROWS_FOR_RETRAIN = int(os.getenv("MIN_NEW_ROWS_FOR_RETRAIN", "60"))
 LIVE_METRICS_PATH = os.path.join(PROJECT_ROOT, "metrics", "live_eval.json")
-COMBINED_METRICS_PATH = os.path.join(PROJECT_ROOT, "metrics", "combined_eval.json")
 RETRAIN_WATERMARK_PATH = os.path.join(PROJECT_ROOT, "metrics", "retrain_watermark.json")
 SCORED_PREDS_PATH = os.path.join(PROJECT_ROOT, "outputs", "preds_api_scored.csv")
 RAW_DATA_PATH = os.path.join(PROJECT_ROOT, "data", "raw", "weatherAUS.csv")
+MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "pipeline.joblib")
+MODEL_META_PATH = os.path.join(PROJECT_ROOT, "models", "model_metadata.json")
 
 default_args = {
     "owner": "mlops-team",
@@ -31,14 +32,9 @@ default_args = {
 def read_quality_metrics() -> dict:
     with open(LIVE_METRICS_PATH, "r", encoding="utf-8") as f:
         live = json.load(f)
-    combined = {}
-    if os.path.exists(COMBINED_METRICS_PATH):
-        with open(COMBINED_METRICS_PATH, "r", encoding="utf-8") as f:
-            combined = json.load(f)
     new_rows_for_retrain, cutoff_date = count_new_labeled_rows_for_retrain()
     return {
         "live": live,
-        "combined": combined,
         "new_rows_for_retrain": new_rows_for_retrain,
         "retrain_cutoff_date": str(cutoff_date) if cutoff_date is not None else None,
     }
@@ -101,6 +97,26 @@ def branch_on_recall(**context) -> str:
     return "trigger_optuna" if recall_live < RECALL_THRESHOLD else "skip_optuna"
 
 
+def ensure_latest_model_ready() -> dict:
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
+
+    info = {
+        "model_path": MODEL_PATH,
+        "model_mtime_utc": datetime.utcfromtimestamp(os.path.getmtime(MODEL_PATH)).isoformat() + "Z",
+    }
+    if os.path.exists(MODEL_META_PATH):
+        try:
+            with open(MODEL_META_PATH, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            info["model_metadata"] = meta
+        except Exception:
+            info["model_metadata"] = {"status": "unreadable"}
+    else:
+        info["model_metadata"] = {"status": "not_found"}
+    return info
+
+
 with DAG(
     dag_id="weather_main_dag",
     description="Main DAG: predict all stations, score against observed truth, trigger Optuna on low recall",
@@ -112,6 +128,11 @@ with DAG(
     tags=["weather", "main", "mlops"],
 ) as dag:
 
+    ensure_latest_model = PythonOperator(
+        task_id="ensure_latest_model",
+        python_callable=ensure_latest_model_ready,
+    )
+
     predict_all_and_push = BashOperator(
         task_id="predict_all_and_push",
         bash_command=f"cd {PROJECT_ROOT} && bash ./scripts/predict_all_and_push.sh ",
@@ -120,11 +141,6 @@ with DAG(
     compute_live_metrics = BashOperator(
         task_id="compute_live_metrics",
         bash_command=f"cd {PROJECT_ROOT} && python -m src.live_monitoring",
-    )
-
-    compute_combined_metrics = BashOperator(
-        task_id="compute_combined_metrics",
-        bash_command=f"cd {PROJECT_ROOT} && python -m src.combined_metrics",
     )
 
     read_live_recall = PythonOperator(
@@ -150,7 +166,7 @@ with DAG(
         trigger_rule="none_failed_min_one_success",
     )
 
-    predict_all_and_push >> compute_live_metrics >> compute_combined_metrics >> read_live_recall >> branch
+    ensure_latest_model >> predict_all_and_push >> compute_live_metrics >> read_live_recall >> branch
     branch >> trigger_optuna >> join_after_branch
     branch >> skip_optuna >> join_after_branch
     join_after_branch

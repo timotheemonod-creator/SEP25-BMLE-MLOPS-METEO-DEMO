@@ -109,13 +109,27 @@ def main():
         cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
         scores = cross_validate(
             pipeline, X, y, cv=cv,
-            scoring={"roc_auc": "roc_auc", "precision": "precision", "recall": "recall", "f1": "f1"}
+            scoring={"roc_auc": "roc_auc", "precision": "precision", "recall": "recall", "f1": "f1", "accuracy": "accuracy"}
         )
 
-        mlflow.log_metric("optuna_cv_roc_auc", float(np.mean(scores["test_roc_auc"])))
-        mlflow.log_metric("optuna_cv_precision", float(np.mean(scores["test_precision"])))
-        mlflow.log_metric("optuna_cv_recall", float(np.mean(scores["test_recall"])))
-        mlflow.log_metric("optuna_cv_f1", float(np.mean(scores["test_f1"])))
+        cv_roc_auc = float(np.mean(scores["test_roc_auc"]))
+        cv_precision = float(np.mean(scores["test_precision"]))
+        cv_recall = float(np.mean(scores["test_recall"]))
+        cv_f1 = float(np.mean(scores["test_f1"]))
+        cv_accuracy = float(np.mean(scores["test_accuracy"]))
+
+        # Metrics namespaced for detailed tracking
+        mlflow.log_metric("optuna_cv_roc_auc", cv_roc_auc)
+        mlflow.log_metric("optuna_cv_precision", cv_precision)
+        mlflow.log_metric("optuna_cv_recall", cv_recall)
+        mlflow.log_metric("optuna_cv_f1", cv_f1)
+        mlflow.log_metric("optuna_cv_accuracy", cv_accuracy)
+        # Canonical aliases so MLflow/DagsHub default metric columns are populated
+        mlflow.log_metric("roc_auc", cv_roc_auc)
+        mlflow.log_metric("precision", cv_precision)
+        mlflow.log_metric("recall", cv_recall)
+        mlflow.log_metric("f1", cv_f1)
+        mlflow.log_metric("accuracy", cv_accuracy)
 
         print("Best CV Recall:", study.best_value)
         print("Best params:", study.best_params)
