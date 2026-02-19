@@ -54,7 +54,7 @@ with DAG(
 
     run_optuna = BashOperator(
         task_id="run_optuna",
-        bash_command=f"cd {PROJECT_ROOT} && docker compose -f docker-compose.yml run --rm evaluate python optimisations/optuna_search_recall_small.py",
+        bash_command=f"cd {PROJECT_ROOT} && PYTHONPATH={PROJECT_ROOT} python optimisations/optuna_search_recall_small.py",
     )
 
     save_best_params = PythonOperator(

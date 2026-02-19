@@ -178,3 +178,4 @@ zipp==3.23.0
 
 pytest==9.0.2
 httpx==0.28.1
+streamlit==1.41.1

@@ -43,3 +43,11 @@ outputs/*
 
 .env.docker
 .env.docker.local
+
+# Local runtime
+.env.airflow
+airflow/logs/
+metrics/live_eval.json
+metrics/combined_eval.json
+models/best_params.json
+optuna_xgb_recall_small.db
