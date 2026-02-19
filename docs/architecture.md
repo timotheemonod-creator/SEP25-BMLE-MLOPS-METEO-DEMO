@@ -16,7 +16,7 @@ Ce document décrit l'architecture **en production projet** (et non l'historique
 
 1. `weather_main_dag` lance les prédictions sur 36 stations.
 2. Les sorties sont enrichies avec les vérités observées (BOM) via `src.live_monitoring`.
-3. Le DAG calcule les métriques live + combinées.
+3. Le DAG calcule les métriques live.
 4. Branche de décision:
    - si `recall_live < seuil` **et** `new_rows_for_retrain >= MIN_NEW_ROWS_FOR_RETRAIN` -> trigger Optuna,
    - sinon skip.
