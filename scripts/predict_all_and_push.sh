@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source scripts/env.local.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-API_URL="${API_URL:-http://127.0.0.1:8000}"
+source "${SCRIPT_DIR}/env.local.sh"
+cd "${PROJECT_ROOT}"
+
+
+API_URL="${API_URL:-http://meteo-api:8000}"
 AUTH_HEADER="Authorization: Bearer ${API_KEY}"
 
 stations=(
@@ -27,10 +32,15 @@ for s in "${stations[@]}"; do
 done
 
 echo "Updating DVC + Git..."
-dvc add outputs/preds_api.csv
-git add outputs/preds_api.csv.dvc
-git commit -m "Update API prediction log ($(date -u +%F))" || true
-git push
-dvc push
+
+if command -v dvc >/dev/null 2>&1; then
+  dvc add outputs/preds_api.csv
+  git add outputs/preds_api.csv.dvc
+  git commit -m "Update API prediction log ($(date -u +%F))" || true
+  git push || true
+  dvc push || true
+else
+  echo "dvc not installed in this runtime, skipping dvc/git push steps."
+fi
 
 echo "Done."

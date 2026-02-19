@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 import joblib
@@ -240,7 +240,8 @@ def predict(
         PRED_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         row = {
             "logged_at_utc": datetime.now(timezone.utc).isoformat(),
-            "target_date": str(features.Date),
+            "feature_date": str(features.Date),
+            "target_date": str(features.Date + timedelta(days=1)),
             "location": features.Location,
             "use_latest": bool(use_latest),
             "station_name": station_name,
