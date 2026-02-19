@@ -118,8 +118,23 @@ def score_predictions() -> Dict[str, float | int | str]:
     if missing:
         raise ValueError(f"Missing expected columns in prediction log: {sorted(missing)}")
 
-    preds["logged_at_utc"] = pd.to_datetime(preds["logged_at_utc"], errors="coerce", utc=True)
-    preds["target_date"] = pd.to_datetime(preds["target_date"], errors="coerce").dt.date
+    # Some historical logs mix naive timestamps and timezone-aware ones.
+    # Parse robustly so we don't drop valid rows from monitoring/retrain logic.
+    try:
+        preds["logged_at_utc"] = pd.to_datetime(preds["logged_at_utc"], errors="coerce", utc=True, format="mixed")
+    except TypeError:
+        preds["logged_at_utc"] = pd.to_datetime(preds["logged_at_utc"], errors="coerce", utc=True)
+    target_ts = pd.to_datetime(preds["target_date"], errors="coerce")
+    preds["target_date"] = target_ts.dt.date
+    # Backward compatibility: older logs may not have feature_date.
+    # In this project target_date is feature_date + 1 day, so we can infer it.
+    if "feature_date" not in preds.columns:
+        preds["feature_date"] = (target_ts - pd.Timedelta(days=1)).dt.date
+    else:
+        feature_ts = pd.to_datetime(preds["feature_date"], errors="coerce")
+        inferred = (target_ts - pd.Timedelta(days=1)).dt.date
+        preds["feature_date"] = feature_ts.dt.date
+        preds.loc[preds["feature_date"].isna(), "feature_date"] = inferred[preds["feature_date"].isna()]
     preds = preds.dropna(subset=["logged_at_utc", "target_date", "location"])
     preds = preds.sort_values("logged_at_utc").drop_duplicates(["location", "target_date"], keep="last")
 

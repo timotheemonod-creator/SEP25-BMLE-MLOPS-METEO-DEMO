@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+import pandas as pd
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
@@ -12,9 +13,12 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 PROJECT_ROOT = os.getenv("PROJECT_ROOT", "/opt/airflow/project")
 RECALL_THRESHOLD = float(os.getenv("RECALL_THRESHOLD", "0.59"))
-MIN_LIVE_LABELS = int(os.getenv("MIN_LIVE_LABELS", "72"))
+MIN_NEW_ROWS_FOR_RETRAIN = int(os.getenv("MIN_NEW_ROWS_FOR_RETRAIN", "60"))
 LIVE_METRICS_PATH = os.path.join(PROJECT_ROOT, "metrics", "live_eval.json")
 COMBINED_METRICS_PATH = os.path.join(PROJECT_ROOT, "metrics", "combined_eval.json")
+RETRAIN_WATERMARK_PATH = os.path.join(PROJECT_ROOT, "metrics", "retrain_watermark.json")
+SCORED_PREDS_PATH = os.path.join(PROJECT_ROOT, "outputs", "preds_api_scored.csv")
+RAW_DATA_PATH = os.path.join(PROJECT_ROOT, "data", "raw", "weatherAUS.csv")
 
 default_args = {
     "owner": "mlops-team",
@@ -31,18 +35,68 @@ def read_quality_metrics() -> dict:
     if os.path.exists(COMBINED_METRICS_PATH):
         with open(COMBINED_METRICS_PATH, "r", encoding="utf-8") as f:
             combined = json.load(f)
+    new_rows_for_retrain, cutoff_date = count_new_labeled_rows_for_retrain()
     return {
         "live": live,
         "combined": combined,
+        "new_rows_for_retrain": new_rows_for_retrain,
+        "retrain_cutoff_date": str(cutoff_date) if cutoff_date is not None else None,
     }
+
+
+def _read_retrain_watermark() -> date | None:
+    if not os.path.exists(RETRAIN_WATERMARK_PATH):
+        return None
+    try:
+        with open(RETRAIN_WATERMARK_PATH, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        watermark = payload.get("last_feature_date")
+        if not watermark:
+            return None
+        return pd.to_datetime(watermark, errors="coerce").date()
+    except Exception:
+        return None
+
+
+def count_new_labeled_rows_for_retrain() -> tuple[int, date | None]:
+    if not os.path.exists(SCORED_PREDS_PATH) or not os.path.exists(RAW_DATA_PATH):
+        return 0, None
+    try:
+        hist = pd.read_csv(RAW_DATA_PATH, usecols=["Date"])
+        hist["Date"] = pd.to_datetime(hist["Date"], errors="coerce").dt.date
+        max_hist_date = hist["Date"].max()
+        if max_hist_date is None:
+            return 0, None
+        watermark_date = _read_retrain_watermark()
+        cutoff_date = max_hist_date
+        if watermark_date is not None and watermark_date > cutoff_date:
+            cutoff_date = watermark_date
+
+        scored = pd.read_csv(SCORED_PREDS_PATH)
+        needed = {"truth_available", "feature_date", "y_true"}
+        if not needed.issubset(scored.columns):
+            return 0, cutoff_date
+        scored = scored[scored["truth_available"] == True].copy()  # noqa: E712
+        scored = scored.dropna(subset=["y_true"])
+        feature_ts = pd.to_datetime(scored["feature_date"], errors="coerce", format="mixed")
+        target_ts = pd.to_datetime(scored.get("target_date"), errors="coerce")
+        inferred = target_ts - pd.Timedelta(days=1)
+        feature_ts = feature_ts.fillna(inferred)
+        scored["feature_date"] = feature_ts.dt.date
+        scored = scored.dropna(subset=["feature_date"])
+        scored = scored[scored["feature_date"] > cutoff_date]
+        scored = scored.drop_duplicates(["location", "feature_date"], keep="last")
+        return int(len(scored)), cutoff_date
+    except Exception:
+        return 0, None
 
 
 def branch_on_recall(**context) -> str:
     payload = context["ti"].xcom_pull(task_ids="read_quality_metrics")
     live = payload.get("live", {})
     recall_live = float(live.get("recall_live", 1.0))
-    scored_rows = int(live.get("scored_rows", 0))
-    if scored_rows < MIN_LIVE_LABELS:
+    new_rows_for_retrain = int(payload.get("new_rows_for_retrain", 0))
+    if new_rows_for_retrain < MIN_NEW_ROWS_FOR_RETRAIN:
         return "skip_optuna"
     return "trigger_optuna" if recall_live < RECALL_THRESHOLD else "skip_optuna"
 

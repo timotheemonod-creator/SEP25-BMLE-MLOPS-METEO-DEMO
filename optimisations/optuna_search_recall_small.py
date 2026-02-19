@@ -1,6 +1,8 @@
 import mlflow
 import optuna
 import numpy as np
+import os
+from pathlib import Path
 
 from sklearn.model_selection import StratifiedKFold, cross_validate
 from sklearn.pipeline import Pipeline
@@ -71,11 +73,12 @@ def objective(trial, X, y, cat_cols, num_cols):
 
 
 def main():
-    raw_path = "data/raw/weatherAUS.csv"
+    raw_path = os.getenv("OPTUNA_RAW_PATH", "data/raw/weatherAUS.csv")
     X, y, cat_cols, num_cols = prepare_dataset(raw_path)
     y = np.asarray(y).astype(int).ravel()
 
-    storage = "sqlite:///optuna_xgb_recall_small.db"
+    optuna_db = Path(__file__).resolve().parent / "optuna_xgb_recall_small.db"
+    storage = f"sqlite:///{optuna_db}"
     study = optuna.create_study(direction="maximize", study_name="xgb_recall_small", storage=storage, load_if_exists=True)
 
     # seed with best-known params

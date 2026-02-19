@@ -138,6 +138,7 @@ PREDS_PATH = PROJECT_ROOT / "outputs" / "preds_api.csv"
 SCORED_PREDS_PATH = PROJECT_ROOT / "outputs" / "preds_api_scored.csv"
 EVAL_PATH = PROJECT_ROOT / "metrics" / "eval.json"
 OPTUNA_SCRIPT = PROJECT_ROOT / "optimisations" / "optuna_search_recall_small.py"
+MIN_NEW_ROWS_FOR_RETRAIN = int(os.getenv("MIN_NEW_ROWS_FOR_RETRAIN", "60"))
 
 INSPIRATION_ODP = Path(r"C:\Users\timot\Downloads\Présentation_MLOPS_Analyse_des_sentiments.odp")
 INSPIRATION_PDF = Path(r"C:\Users\timot\Downloads\parivision_presentation.pdf")
@@ -508,8 +509,9 @@ def _live_demo_view() -> None:
 
     api_url = st.sidebar.text_input("API URL", value=os.getenv("STREAMLIT_API_URL", "http://127.0.0.1:8000"))
     api_key = st.sidebar.text_input("API KEY", value=os.getenv("API_KEY", ""), type="password")
-    min_labels = st.sidebar.number_input("Seuil labels min (monitoring)", min_value=1, value=72, step=1)
-    st.sidebar.caption(f"Decision actuelle: Optuna si recall < 0.59 ET labels >= {min_labels}")
+    st.sidebar.caption(
+        f"Decision actuelle: Optuna si recall < 0.59 ET nouvelles lignes retrain >= {MIN_NEW_ROWS_FOR_RETRAIN}"
+    )
 
     tab1, tab2, tab3, tab4 = st.tabs(
         ["1) Sante & prediction API", "2) Batch 36 stations", "3) Monitoring metriques", "4) Optuna mode demo"]
