@@ -43,3 +43,14 @@ outputs/*
 
 .env.docker
 .env.docker.local
+
+# Local runtime
+.env.airflow
+airflow/logs/
+metrics/live_eval.json
+metrics/retrain_dataset_meta.json
+models/best_params.json
+models/model_metadata.json
+optuna_xgb_recall_small.db
+docker-compose.before-airflow.yml
+metrics/retrain_watermark.json

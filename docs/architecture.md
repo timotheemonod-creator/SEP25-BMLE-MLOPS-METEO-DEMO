@@ -1,156 +1,45 @@
-# Schéma complet de la solution
+﻿# Architecture technique (version active)
 
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                              SOURCES DE DONNÉES                               │
-│                                                                              │
-│  Kaggle: weatherAUS.csv                                                       │
-│  (10 ans d’observations quotidiennes en Australie)                            │
-└──────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      v
-                        ┌──────────────────────────┐
-                        │ data/raw/weatherAUS.csv  │
-                        └─────────────┬────────────┘
-                                      │
-                                      v
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                         PRÉPARATION DES DONNÉES                               │
-│  src/data_preparation.py                                                      │
-│  - drop NA cible (RainTomorrow)                                               │
-│  - outliers -> NaN (WindSpeed9am, Evaporation, Rainfall)                      │
-│  - features temps: Dayofyear, Month                                           │
-│  - séparation X/y + détection colonnes cat/num                                │
-└──────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      v
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                         ENTRAÎNEMENT (BASELINE)                               │
-│  src/training.py                                                              │
-│  - split train/test (80/20, stratifié)                                        │
-│  - pipeline sklearn/imblearn:                                                 │
-│      * imputation (fit sur train)                                             │
-│      * one-hot encode (fit sur train)                                         │
-│      * sin/cos (Dayofyear, Month)                                             │
-│      * scaling (with_mean=False)                                              │
-│      * SMOTE                                                                  │
-│      * XGBoost                                                                │
-│  - métriques: accuracy, precision, recall, f1, roc_auc                        │
-│  - export modèle -> models/pipeline.joblib                                    │
-└──────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      v
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                         ÉVALUATION OFFLINE                                   │
-│  src/evaluation.py                                                            │
-│  - recharge pipeline.joblib                                                   │
-│  - métriques sur test                                                         │
-└──────────────────────────────────────────────────────────────────────────────┘
+Ce document décrit l'architecture **en production projet** (et non l'historique).
 
-═══════════════════════════════════════════════════════════════════════════════
-                             ORCHESTRATION LOCALE
-═══════════════════════════════════════════════════════════════════════════════
+## 1) Vue d'ensemble
 
-Makefile (mon_projet_ml/Makefile)
-- make setup      -> pip install -r requirements.txt
-- make preprocess -> python -m src.data_preparation
-- make train      -> python -m src.training
-- make evaluate   -> python -m src.evaluation
-- make predict    -> python -m src.predict_batch
-- make api        -> uvicorn api.main:app
+- `FastAPI` expose `/health` et `/predict` et lit le modèle actif `models/pipeline.joblib`.
+- `Airflow` orchestre:
+  - `weather_main_dag` pour la prédiction + monitoring + décision,
+  - `optuna_tuning_dag` pour tuning + retrain + watermark.
+- `MLflow` trace les runs d'entraînement, d'évaluation, d'Optuna et de retrain.
+- `DVC + DagsHub` versionnent les artefacts volumineux (dataset, logs de prédictions, base Optuna).
+- `Streamlit` sert de support de soutenance (slides + démo live API).
 
-Scripts (mon_projet_ml/scripts/)
-- preprocess.sh   -> python -m src.data_preparation
-- train.sh        -> python -m src.training
-- evaluate.sh     -> python -m src.evaluation
-- predict.sh      -> python -m src.predict_batch
+## 2) Chaîne opérationnelle
 
-Cron (mon_projet_ml/scripts/cron.txt)
-- 02:00 preprocess
-- 02:15 train
-- 02:30 evaluate
-- 02:45 predict
+1. `weather_main_dag` lance les prédictions sur 36 stations.
+2. Les sorties sont enrichies avec les vérités observées (BOM) via `src.live_monitoring`.
+3. Le DAG calcule les métriques live.
+4. Branche de décision:
+   - si `recall_live < seuil` **et** `new_rows_for_retrain >= MIN_NEW_ROWS_FOR_RETRAIN` -> trigger Optuna,
+   - sinon skip.
+5. `optuna_tuning_dag` exécute:
+   - `src.retrain_dataset_builder` (historique + nouvelles lignes scorées),
+   - `optimisations/prod/optuna_search_recall_small.py`,
+   - export des meilleurs paramètres,
+   - retrain final (`src.retrain_with_best_params`),
+   - mise à jour du watermark (`metrics/retrain_watermark.json`).
 
-═══════════════════════════════════════════════════════════════════════════════
-                          PRÉDICTION BATCH QUOTIDIENNE
-═══════════════════════════════════════════════════════════════════════════════
+## 3) Microservices Docker
 
-src/predict_batch.py
-- lit data/raw/weatherAUS.csv
-- sélectionne la dernière date disponible
-- applique le pipeline entraîné
-- écrit une ligne par exécution
+- `api-inference` (`docker/Dockerfile.api`)
+- `mlflow-server` (`docker/Dockerfile.ml`)
+- Jobs ML (`preprocess`, `train`, `evaluate`, `predict-batch`) via `docker-compose.yml`
+- Stack Airflow (`webserver`, `scheduler`, `triggerer`, `postgres`) via `docker-compose.airflow.yml`
 
-Artefact :
-- outputs/predictions_daily.csv
-  (run_at, date, location, rain_probability, rain_tomorrow)
+## 4) Emplacements clés
 
-═══════════════════════════════════════════════════════════════════════════════
-                               API D’INFÉRENCE
-═══════════════════════════════════════════════════════════════════════════════
-
-FastAPI (mon_projet_ml/api/main.py)
-- GET  /health
-- POST /predict
-    Entrée : features météo + Date
-    Traitement :
-      * calcule Dayofyear + Month depuis Date
-      * drop Date
-      * predict_proba
-    Sortie :
-      * rain_tomorrow (0/1)
-      * rain_probability (float)
-
-Swagger : http://127.0.0.1:8000/docs
-
-═══════════════════════════════════════════════════════════════════════════════
-                               CONTENEURISATION
-═══════════════════════════════════════════════════════════════════════════════
-
-Dockerfile (mon_projet_ml/Dockerfile)
-- base python:3.12-slim
-- installe requirements.txt
-- copie api/, src/, models/
-- expose 8000
-- lance uvicorn
-
-Exécution :
-- docker build -t meteo-api .
-- docker run -p 8000:8000 -v $(pwd)/models:/app/models meteo-api
-
-═══════════════════════════════════════════════════════════════════════════════
-                               DOCUMENTATION
-═══════════════════════════════════════════════════════════════════════════════
-
-docs/specifications.md
-- cas d’usage
-- objectifs
-- métriques
-- hypothèses
-- sources et prétraitement
-- API et tests manuels
-
-README.md
-- commandes
-- schémas
-- usage API
-- Docker
-
-═══════════════════════════════════════════════════════════════════════════════
-                                 ARBORESCENCE
-═══════════════════════════════════════════════════════════════════════════════
-
-mon_projet_ml/
-├── api/                    # FastAPI
-├── data/
-│   ├── raw/                # weatherAUS.csv
-│   └── processed/
-├── models/                 # pipeline.joblib
-├── outputs/                # predictions_daily.csv
-├── scripts/                # preprocess/train/evaluate/predict + cron
-├── src/                    # data_preparation, training, evaluation, predict_batch
-├── docs/                   # specifications.md
-├── requirements.txt
-├── Makefile
-└── README.md
-```
+- DAGs: `airflow/dags/`
+- Code ML: `src/`
+- API: `api/`
+- Optimisation active: `optimisations/prod/`
+- Recherche / benchmark: `optimisations/research/`
+- Présentation: `streamlit_app.py`, `assets/slides/`
+- Documentation: `README.md`, `docs/specifications.md`

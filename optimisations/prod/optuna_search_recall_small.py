@@ -1,6 +1,8 @@
 import mlflow
 import optuna
 import numpy as np
+import os
+from pathlib import Path
 
 from sklearn.model_selection import StratifiedKFold, cross_validate
 from sklearn.pipeline import Pipeline
@@ -71,11 +73,12 @@ def objective(trial, X, y, cat_cols, num_cols):
 
 
 def main():
-    raw_path = "data/raw/weatherAUS.csv"
+    raw_path = os.getenv("OPTUNA_RAW_PATH", "data/raw/weatherAUS.csv")
     X, y, cat_cols, num_cols = prepare_dataset(raw_path)
     y = np.asarray(y).astype(int).ravel()
 
-    storage = "sqlite:///optuna_xgb_recall_small.db"
+    optuna_db = Path(__file__).resolve().parent / "optuna_xgb_recall_small.db"
+    storage = f"sqlite:///{optuna_db}"
     study = optuna.create_study(direction="maximize", study_name="xgb_recall_small", storage=storage, load_if_exists=True)
 
     # seed with best-known params
@@ -106,13 +109,27 @@ def main():
         cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
         scores = cross_validate(
             pipeline, X, y, cv=cv,
-            scoring={"roc_auc": "roc_auc", "precision": "precision", "recall": "recall", "f1": "f1"}
+            scoring={"roc_auc": "roc_auc", "precision": "precision", "recall": "recall", "f1": "f1", "accuracy": "accuracy"}
         )
 
-        mlflow.log_metric("optuna_cv_roc_auc", float(np.mean(scores["test_roc_auc"])))
-        mlflow.log_metric("optuna_cv_precision", float(np.mean(scores["test_precision"])))
-        mlflow.log_metric("optuna_cv_recall", float(np.mean(scores["test_recall"])))
-        mlflow.log_metric("optuna_cv_f1", float(np.mean(scores["test_f1"])))
+        cv_roc_auc = float(np.mean(scores["test_roc_auc"]))
+        cv_precision = float(np.mean(scores["test_precision"]))
+        cv_recall = float(np.mean(scores["test_recall"]))
+        cv_f1 = float(np.mean(scores["test_f1"]))
+        cv_accuracy = float(np.mean(scores["test_accuracy"]))
+
+        # Metrics namespaced for detailed tracking
+        mlflow.log_metric("optuna_cv_roc_auc", cv_roc_auc)
+        mlflow.log_metric("optuna_cv_precision", cv_precision)
+        mlflow.log_metric("optuna_cv_recall", cv_recall)
+        mlflow.log_metric("optuna_cv_f1", cv_f1)
+        mlflow.log_metric("optuna_cv_accuracy", cv_accuracy)
+        # Canonical aliases so MLflow/DagsHub default metric columns are populated
+        mlflow.log_metric("roc_auc", cv_roc_auc)
+        mlflow.log_metric("precision", cv_precision)
+        mlflow.log_metric("recall", cv_recall)
+        mlflow.log_metric("f1", cv_f1)
+        mlflow.log_metric("accuracy", cv_accuracy)
 
         print("Best CV Recall:", study.best_value)
         print("Best params:", study.best_params)

@@ -1,0 +1,6 @@
+﻿# Dépendances dev (ajoutées au runtime)
+-r requirements.in
+
+pytest
+httpx
+pip-tools

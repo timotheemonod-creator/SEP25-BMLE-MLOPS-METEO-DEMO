@@ -1,0 +1,10 @@
+numpy
+pandas
+scikit-learn
+imbalanced-learn
+xgboost
+joblib
+mlflow
+python-dotenv
+requests
+optuna

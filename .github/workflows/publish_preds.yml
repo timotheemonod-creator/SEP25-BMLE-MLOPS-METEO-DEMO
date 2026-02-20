@@ -1,0 +1,79 @@
+name: Publish predictions to DagsHub
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to commit predictions on"
+        required: false
+        default: "feat/airflow-orchestration"
+  schedule:
+    - cron: "15 6,18 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  publish-preds:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install DVC
+        run: |
+          python -m pip install --upgrade pip
+          pip install "dvc[s3]"
+
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Configure DVC remote credentials
+        env:
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          dvc remote modify origin endpointurl https://dagshub.com/timotheemonod-creator/SEP25-BMLE-MLOPS-METEO.s3
+          dvc remote modify --local origin access_key_id "$DAGSHUB_USERNAME"
+          dvc remote modify --local origin secret_access_key "$DAGSHUB_TOKEN"
+
+      - name: Validate predictions file
+        run: |
+          test -f outputs/preds_api.csv
+
+      - name: Track predictions with DVC
+        run: |
+          dvc add outputs/preds_api.csv
+          git add outputs/preds_api.csv.dvc .gitignore
+
+      - name: Commit if changed
+        run: |
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(data): update preds_api.csv [skip ci]"
+
+      - name: Push Git changes
+        run: |
+          git push origin HEAD:${{ github.event.inputs.branch || github.ref_name }}
+
+      - name: Push DVC cache to DagsHub
+        env:
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          dvc remote modify --local origin access_key_id "$DAGSHUB_USERNAME"
+          dvc remote modify --local origin secret_access_key "$DAGSHUB_TOKEN"
+          dvc push

@@ -24,6 +24,27 @@ def load_raw(path):
 def basic_cleaning(df):
     df = df.copy()
     df = df.dropna(subset=["RainTomorrow"])
+    numeric_cols = [
+        "MinTemp",
+        "MaxTemp",
+        "Rainfall",
+        "Evaporation",
+        "Sunshine",
+        "WindGustSpeed",
+        "WindSpeed9am",
+        "WindSpeed3pm",
+        "Humidity9am",
+        "Humidity3pm",
+        "Pressure9am",
+        "Pressure3pm",
+        "Cloud9am",
+        "Cloud3pm",
+        "Temp9am",
+        "Temp3pm",
+    ]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
     df.loc[df["WindSpeed9am"] > 100, "WindSpeed9am"] = np.nan
     df.loc[df["Evaporation"] > 140, "Evaporation"] = np.nan
     df.loc[df["Rainfall"] > 350, "Rainfall"] = np.nan
@@ -32,7 +53,11 @@ def basic_cleaning(df):
 
 def add_time_features(df):
     df = df.copy()
-    df["Date"] = pd.to_datetime(df["Date"])
+    try:
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce", format="mixed")
+    except TypeError:
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date"])
     df["Dayofyear"] = df["Date"].dt.dayofyear
     df["Month"] = df["Date"].dt.month
     df = df.drop(columns=["Date"])
@@ -70,7 +95,14 @@ def prepare_dataset(raw_path):
     df = basic_cleaning(df)
     df = add_time_features(df)
     X = df.drop("RainTomorrow", axis=1)
-    y = (df["RainTomorrow"] == "Yes").astype(int)
+    y = (
+        df["RainTomorrow"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .isin({"yes", "1", "true"})
+        .astype(int)
+    )
     cat_cols = X.select_dtypes(include=["object"]).columns
     num_cols = X.select_dtypes(include=["int32", "int64", "float64"]).columns
     num_cols = [c for c in num_cols if c not in {"Dayofyear", "Month"}]
@@ -90,7 +122,14 @@ def save_processed(raw_path, processed_path):
 def prepare_dataset_from_processed(processed_path):
     df = pd.read_csv(processed_path)
     X = df.drop("RainTomorrow", axis=1)
-    y = (df["RainTomorrow"] == "Yes").astype(int)
+    y = (
+        df["RainTomorrow"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .isin({"yes", "1", "true"})
+        .astype(int)
+    )
     cat_cols = X.select_dtypes(include=["object"]).columns
     num_cols = X.select_dtypes(include=["int32", "int64", "float64"]).columns
     num_cols = [c for c in num_cols if c not in {"Dayofyear", "Month"}]
