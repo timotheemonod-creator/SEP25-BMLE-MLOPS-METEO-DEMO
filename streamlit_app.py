@@ -412,7 +412,7 @@ Docker Compose
             "context": "Cette slide assemble la logique décisionnelle complète: quand Optuna part, quand il ne part pas, et comment les outils se complètent.",
             "done": [
                 "DAG principal `weather_main_dag`: prédiction, scoring live, branche conditionnelle.",
-                "Condition Optuna: recall_live < seuil ET new_rows_for_retrain >= seuil minimal.",
+                "Condition Optuna: recall_combined_cv < seuil ET new_rows_for_retrain >= seuil minimal.",
                 "DAG `optuna_tuning_dag`: build dataset retrain -> optuna -> export best params -> retrain modèle -> maj watermark.",
                 "Watermark retrain: évite de relancer Optuna sur les mêmes nouvelles lignes déjà consommées.",
                 "Architecture complète relie API, monitoring, orchestration, versioning et tracking.",
@@ -424,12 +424,14 @@ Docker Compose
             "schema": """
 weather_main_dag
   predict_all_and_push
+    -> predictions_ready
     -> compute_live_metrics
-    -> read_quality_metrics
+    -> compute_retrain_quality
     -> branch_on_recall
          if new_rows < MIN_NEW_ROWS_FOR_RETRAIN: skip_optuna
-         else if recall_live < RECALL_THRESHOLD: trigger_optuna
+         else if recall_combined_cv < RECALL_THRESHOLD: trigger_optuna
          else: skip_optuna
+    -> join_after_branch (fin branche qualité)
 
 optuna_tuning_dag
   run_optuna (dataset retrain + recherche)
@@ -541,7 +543,7 @@ def _live_demo_view() -> None:
     api_url = st.sidebar.text_input("API URL", value=os.getenv("STREAMLIT_API_URL", "http://127.0.0.1:8000"))
     api_key = st.sidebar.text_input("API KEY", value=os.getenv("API_KEY", ""), type="password")
     st.sidebar.caption(
-        f"Decision actuelle: Optuna si recall < 0.59 ET nouvelles lignes retrain >= {MIN_NEW_ROWS_FOR_RETRAIN}"
+        f"Decision actuelle: Optuna si recall combine CV < 0.59 ET nouvelles lignes retrain >= {MIN_NEW_ROWS_FOR_RETRAIN}"
     )
 
     tab1, tab2, tab3 = st.tabs(
