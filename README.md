@@ -19,7 +19,7 @@ Objectif technique:
 - Avoir un pipeline reproductible et industrialisable,
 - Servir les prédictions via API,
 - Suivre la qualité du modèle dans le temps (offline + live),
-- Déclencher automatiquement une optimisation quand la qualité live se dégrade.
+- Déclencher automatiquement une optimisation quand la qualité combinée (historique + nouvelles observations BOM validées) se dégrade.
 
 Métriques suivies:
 - `recall` (prioritaire),
@@ -49,11 +49,12 @@ Métriques suivies:
            |                            |
            |                            v
            |                     metrics/live_eval.json
+           |                     metrics/retrain_quality_eval.json
            |                            |
            |                            v
            |                  Airflow: weather_main_dag
            |                            |
-           |                    branch_on_recall
+           |                    branch_on_recall (sur recall_combined_cv)
            |                            |
            |         +------------------+-------------------+
            |         |                                      |
@@ -174,6 +175,7 @@ Dans Airflow:
 
 Dans les fichiers de métriques:
 - `metrics/live_eval.json`: métriques live sur prédictions scorées,
+- `metrics/retrain_quality_eval.json`: métriques CV sur dataset combiné historique + live validé,
 - `metrics/retrain_watermark.json`: point de consommation des nouvelles données après retrain/optuna.
 
 ## 6) Pipelines applicatifs
@@ -211,14 +213,20 @@ Planification:
 Enchaînement des tasks:
 1. `predict_all_and_push`
 2. `compute_live_metrics`
-3. `read_quality_metrics`
+3. `compute_retrain_quality`
 4. `branch_on_recall`
 5. `trigger_optuna` ou `skip_optuna`
 6. `join_after_branch`
+7. `predictions_ready` (branche rapide de confirmation des prédictions)
+
+Structure:
+- Deux fins distinctes dans le DAG:
+  - `predictions_ready` (fin rapide côté prédictions),
+  - `join_after_branch` (fin du quality gate Optuna/skip).
 
 Règle de décision:
 - Déclencher Optuna si et seulement si:
-  - `recall_live < RECALL_THRESHOLD` (par défaut `0.59`),
+  - `recall_combined_cv < RECALL_THRESHOLD` (par défaut `0.59`),
   - et `new_rows_for_retrain >= MIN_NEW_ROWS_FOR_RETRAIN` (par défaut `60`).
 
 Calcul `new_rows_for_retrain`:
@@ -249,17 +257,17 @@ Effet du watermark:
 ```text
 weather_main_dag
   -> predict_all_and_push
+  -> predictions_ready
   -> compute_live_metrics
-  -> read_quality_metrics
-       lit recall_live + new_rows_for_retrain
-       avec cutoff = max(max_hist_date, watermark)
+  -> compute_retrain_quality
   -> branch_on_recall
        si new_rows_for_retrain < MIN_NEW_ROWS_FOR_RETRAIN
             -> skip_optuna
-       sinon si recall_live < RECALL_THRESHOLD
+       sinon si recall_combined_cv < RECALL_THRESHOLD
             -> trigger_optuna -> optuna_tuning_dag
        sinon
             -> skip_optuna
+  -> join_after_branch (fin de la branche qualité uniquement)
 ```
 
 Table de comportements:
@@ -276,9 +284,10 @@ Table de comportements:
 |---|---|---|---|---|
 | `ensure_latest_model` | `return_value` (chemin modèle, mtime, metadata) | XCom | Diagnostic Airflow / debug | Vérifier qu'un modèle actif existe avant prédiction |
 | `predict_all_and_push` | `outputs/preds_api.csv` | CSV | `src.live_monitoring`, CI (`publish_preds.yml`), Streamlit | Journal brut des prédictions API |
+| `predictions_ready` | état de fin branche prédiction | Task state | Airflow UI | Marquer la disponibilité rapide des prédictions |
 | `compute_live_metrics` | `outputs/preds_api_scored.csv` | CSV | `src.retrain_dataset_builder`, Streamlit | Prédictions enrichies avec vérité observée (`truth_available`, `y_true`, `feature_date`) |
-| `compute_live_metrics` | `metrics/live_eval.json` | JSON | `read_quality_metrics`, Streamlit | Qualité live (accuracy/precision/recall/f1/roc_auc) |
-| `read_quality_metrics` | `return_value` (`live`, `new_rows_for_retrain`, `retrain_cutoff_date`) | XCom | `branch_on_recall` | Centraliser les signaux de décision |
+| `compute_live_metrics` | `metrics/live_eval.json` | JSON | Streamlit | Qualité live (monitoring production) |
+| `compute_retrain_quality` | `metrics/retrain_quality_eval.json` | JSON | `branch_on_recall`, Streamlit | Qualité combinée robuste (CV) + `new_rows_for_retrain` pour décision |
 | `branch_on_recall` | branche cible (`trigger_optuna` ou `skip_optuna`) | XCom interne de branchement | Airflow (scheduler) | Appliquer la règle métier |
 
 ### `optuna_tuning_dag`
@@ -291,24 +300,22 @@ Table de comportements:
 | `save_best_params` | `models/best_params.json` | JSON | `retrain_with_best`, Streamlit (explication) | Publier les meilleurs hyperparamètres |
 | `retrain_with_best` | `models/pipeline.joblib` | Binaire modèle | API `/predict`, `ensure_latest_model` | Activer le dernier modèle retrainé |
 | `retrain_with_best` | `models/model_metadata.json` | JSON | `ensure_latest_model`, audit | Traçabilité du modèle entraîné (date, params, rows) |
-| `mark_retrain_consumed` | `metrics/retrain_watermark.json` | JSON | `read_quality_metrics` (dans DAG principal) | Empêcher de recompter le même lot de lignes live |
-
-### Exemple de payload XCom clé (`read_quality_metrics`)
+| `mark_retrain_consumed` | `metrics/retrain_watermark.json` | JSON | `compute_retrain_quality` (dans DAG principal) | Empêcher de recompter le même lot de lignes live |
+### Exemple de payload clé (`metrics/retrain_quality_eval.json`)
 
 ```json
 {
-  "live": {
-    "recall_live": 0.4193,
-    "scored_rows": 138
-  },
+  "status": "ok",
+  "recall_combined_cv": 0.6067,
+  "rows_used": 142363,
   "new_rows_for_retrain": 0,
   "retrain_cutoff_date": "2026-02-18"
 }
 ```
 
 Interprétation:
-- `branch_on_recall` décide à partir de ce payload.
-- Si `new_rows_for_retrain < MIN_NEW_ROWS_FOR_RETRAIN`, Optuna est skip même si le recall live est faible.
+- `branch_on_recall` lit ce JSON directement.
+- Si `new_rows_for_retrain < MIN_NEW_ROWS_FOR_RETRAIN`, Optuna est skip même si le recall combiné est faible.
 
 ## 8) Installation et démarrage
 
