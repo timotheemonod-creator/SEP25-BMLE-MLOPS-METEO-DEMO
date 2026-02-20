@@ -3,7 +3,6 @@
 import json
 import os
 import textwrap
-import csv
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -131,10 +130,8 @@ div[data-testid="metric-container"] label {
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-LIVE_METRICS_PATH = PROJECT_ROOT / "metrics" / "live_eval.json"
-PREDS_PATH = PROJECT_ROOT / "outputs" / "preds_api.csv"
-SCORED_PREDS_PATH = PROJECT_ROOT / "outputs" / "preds_api_scored.csv"
 EVAL_PATH = PROJECT_ROOT / "metrics" / "eval.json"
+RETRAIN_QUALITY_PATH = PROJECT_ROOT / "metrics" / "retrain_quality_eval.json"
 MIN_NEW_ROWS_FOR_RETRAIN = int(os.getenv("MIN_NEW_ROWS_FOR_RETRAIN", "60"))
 ASSETS_DIR = PROJECT_ROOT / "assets" / "slides"
 IMG_AIRFLOW_MAIN = ASSETS_DIR / "airflow_weather_main_graph.png"
@@ -162,46 +159,6 @@ def _load_json(path: Path) -> dict[str, Any]:
         return {}
 
 
-def _load_preds_flexible(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        return pd.DataFrame()
-
-    rows: list[dict[str, Any]] = []
-    with open(path, "r", encoding="utf-8", newline="") as f:
-        reader = csv.reader(f)
-        _ = next(reader, None)  # header ignored on purpose (mixed historical formats)
-        for row in reader:
-            if not row:
-                continue
-            if len(row) == 7:
-                rows.append(
-                    {
-                        "logged_at_utc": row[0],
-                        "feature_date": None,
-                        "target_date": row[1],
-                        "location": row[2],
-                        "use_latest": row[3],
-                        "station_name": row[4],
-                        "rain_probability": row[5],
-                        "predicted_rain": row[6],
-                    }
-                )
-            elif len(row) >= 8:
-                rows.append(
-                    {
-                        "logged_at_utc": row[0],
-                        "feature_date": row[1],
-                        "target_date": row[2],
-                        "location": row[3],
-                        "use_latest": row[4],
-                        "station_name": row[5],
-                        "rain_probability": row[6],
-                        "predicted_rain": row[7],
-                    }
-                )
-    return pd.DataFrame(rows)
-
-
 def _show_metric_cards(metrics: dict[str, Any], title: str) -> None:
     st.subheader(title)
     if not metrics:
@@ -216,6 +173,23 @@ def _show_metric_cards(metrics: dict[str, Any], title: str) -> None:
     cols[4].metric("ROC AUC", f"{roc:.3f}" if isinstance(roc, (int, float)) else "n/a")
 
 
+def _show_combined_metric_cards(metrics: dict[str, Any], title: str) -> None:
+    st.subheader(title)
+    if not metrics:
+        st.info("Fichier de métriques combinées indisponible.")
+        return
+    if metrics.get("status") != "ok":
+        st.warning(f"Statut métriques combinées: {metrics.get('status', 'unknown')}")
+        return
+    cols = st.columns(5)
+    cols[0].metric("Accuracy", f"{float(metrics.get('accuracy_combined_cv', 0.0)):.3f}")
+    cols[1].metric("Precision", f"{float(metrics.get('precision_combined_cv', 0.0)):.3f}")
+    cols[2].metric("Recall", f"{float(metrics.get('recall_combined_cv', 0.0)):.3f}")
+    cols[3].metric("F1", f"{float(metrics.get('f1_combined_cv', 0.0)):.3f}")
+    roc = metrics.get("roc_auc_combined_cv")
+    cols[4].metric("ROC AUC", f"{float(roc):.3f}" if isinstance(roc, (int, float)) else "n/a")
+
+
 def _api_request(api_url: str, api_key: str, station: str) -> dict[str, Any]:
     headers = {"Authorization": f"Bearer {api_key}", "accept": "application/json"}
     url = f"{api_url.rstrip('/')}/predict"
@@ -225,6 +199,13 @@ def _api_request(api_url: str, api_key: str, station: str) -> dict[str, Any]:
     payload = resp.json()
     payload["station_name"] = station
     return payload
+
+
+def _api_fetch_latest(api_url: str, station: str) -> dict[str, Any]:
+    url = f"{api_url.rstrip('/')}/latest_weather"
+    resp = requests.get(url, params={"station_name": station}, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def _render_schema(title: str, schema_text: str) -> None:
@@ -559,8 +540,18 @@ def _live_demo_view() -> None:
             except Exception as e:
                 st.error(f"Erreur API: {e}")
 
+        st.subheader("Fetch meteo BOM (/latest_weather)")
+        fetch_station = st.selectbox("Station pour fetch", STATIONS, index=0, key="fetch_station")
+        if st.button("Appeler /latest_weather"):
+            try:
+                payload = _api_fetch_latest(api_url, fetch_station)
+                st.success("Fetch météo réussi.")
+                st.json(payload)
+            except Exception as e:
+                st.error(f"Erreur fetch: {e}")
+
         st.subheader("Prediction unitaire")
-        station = st.selectbox("Station", STATIONS, index=0)
+        station = st.selectbox("Station", STATIONS, index=0, key="predict_station")
         if st.button("Predire pour la station selectionnee"):
             if not api_key:
                 st.warning("Renseigne API KEY dans la sidebar.")
@@ -590,29 +581,23 @@ def _live_demo_view() -> None:
                 st.dataframe(pd.DataFrame(rows), use_container_width=True)
 
     with tab3:
-        live_metrics = _load_json(LIVE_METRICS_PATH)
+        cta1, cta2 = st.columns([1, 3])
+        with cta1:
+            if st.button("Rafraichir les dernieres metriques"):
+                st.rerun()
+        with cta2:
+            if RETRAIN_QUALITY_PATH.exists():
+                ts = datetime.fromtimestamp(RETRAIN_QUALITY_PATH.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                st.caption(f"Dernière mise à jour combinée: {ts}")
+            else:
+                st.caption("Fichier combiné non trouvé: metrics/retrain_quality_eval.json")
+
+        combined_metrics = _load_json(RETRAIN_QUALITY_PATH)
         offline_metrics = _load_json(EVAL_PATH)
 
-        _show_metric_cards(live_metrics, "Métriques live")
+        _show_combined_metric_cards(combined_metrics, "Métriques combinées (décision Optuna)")
         st.divider()
         _show_metric_cards(offline_metrics, "Métriques offline")
-
-        st.subheader("Apercu des fichiers de suivi")
-        c1, c2 = st.columns(2)
-        with c1:
-            if PREDS_PATH.exists():
-                df = _load_preds_flexible(PREDS_PATH)
-                st.write(f"`preds_api.csv` - {len(df)} lignes")
-                st.dataframe(df.tail(20), use_container_width=True)
-            else:
-                st.info("`outputs/preds_api.csv` introuvable.")
-        with c2:
-            if SCORED_PREDS_PATH.exists():
-                sdf = pd.read_csv(SCORED_PREDS_PATH)
-                st.write(f"`preds_api_scored.csv` - {len(sdf)} lignes")
-                st.dataframe(sdf.tail(20), use_container_width=True)
-            else:
-                st.info("`outputs/preds_api_scored.csv` introuvable.")
 
 
 def main() -> None:
