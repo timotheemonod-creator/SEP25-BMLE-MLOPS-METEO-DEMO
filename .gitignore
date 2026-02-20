@@ -54,3 +54,8 @@ models/model_metadata.json
 optuna_xgb_recall_small.db
 docker-compose.before-airflow.yml
 metrics/retrain_watermark.json
+
+# Local handoff/diagram artifacts
+handoff/
+assets/slides/system_architecture_full.mmd
+assets/slides/system_architecture_full_hd.png
