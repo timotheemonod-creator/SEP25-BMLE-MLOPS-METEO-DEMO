@@ -39,6 +39,7 @@ logs/preds_api.csv
 outputs/*
 !outputs/preds_api.csv
 !outputs/preds_api.csv.dvc
+!outputs/preds_api_scored.csv.dvc
 !outputs/.gitignore
 
 .env.docker
