@@ -1,0 +1,17 @@
+{
+  "status": "ok",
+  "rows_used": 142431,
+  "cv_splits": 5,
+  "accuracy_combined_cv": 0.8650785264164798,
+  "precision_combined_cv": 0.7448358973268171,
+  "recall_combined_cv": 0.606862693548462,
+  "f1_combined_cv": 0.6687883891500646,
+  "roc_auc_combined_cv": 0.9022988424945277,
+  "retrain_dataset_meta": {
+    "historical_rows": 145460,
+    "added_rows": 238,
+    "total_rows": 145698
+  },
+  "new_rows_for_retrain": 101,
+  "retrain_cutoff_date": "2026-02-18"
+}

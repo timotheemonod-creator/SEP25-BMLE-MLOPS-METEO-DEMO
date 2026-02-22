@@ -1,0 +1,11 @@
+{
+  "status": "ok",
+  "accuracy_live": 0.685,
+  "precision_live": 0.6119402985074627,
+  "recall_live": 0.5256410256410257,
+  "f1_live": 0.5655172413793104,
+  "roc_auc_live": 0.7222047078604455,
+  "scored_rows": 200,
+  "positives_true": 78,
+  "window": 200
+}
