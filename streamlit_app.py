@@ -74,6 +74,11 @@ h1, h2, h3, h4 {
   box-shadow: 0 16px 35px rgba(16,40,69,0.18);
 }
 
+.hero h2 {
+  color: #ffffff !important;
+  font-weight: 800 !important;
+}
+
 .hero p {
   margin: 0.45rem 0 0 0;
   color: #eaf4ff;
@@ -372,12 +377,6 @@ def _api_view() -> None:
     """,
         unsafe_allow_html=True,
     )
-    st.markdown(
-        "<div class='badge-line'><span class='badge'>MLOps</span><span class='badge'>Airflow</span><span class='badge'>FastAPI</span><span class='badge'>MLflow</span><span class='badge'>DVC</span></div>",
-        unsafe_allow_html=True,
-    )
-    
-         
     st.markdown("<div style='height: 1.5em;'></div>", unsafe_allow_html=True)
 
     st.markdown("""
@@ -440,12 +439,6 @@ def _versionning_view() -> None:
     """,
         unsafe_allow_html=True,
     )
-    st.markdown(
-        "<div class='badge-line'><span class='badge'>MLOps</span><span class='badge'>Airflow</span><span class='badge'>FastAPI</span><span class='badge'>MLflow</span><span class='badge'>DVC</span></div>",
-        unsafe_allow_html=True,
-    )
-    
-         
     st.markdown("<div style='height: 1.5em;'></div>", unsafe_allow_html=True)
     col_a, col_b = st.columns([1.2, 1])
 
@@ -549,11 +542,6 @@ def _orchestration_view() -> None:
     """,
         unsafe_allow_html=True,
     )
-    st.markdown(
-        "<div class='badge-line'><span class='badge'>MLOps</span><span class='badge'>Airflow</span><span class='badge'>FastAPI</span><span class='badge'>MLflow</span><span class='badge'>DVC</span></div>",
-        unsafe_allow_html=True,
-    )
-    
     st.markdown("<div style='height: 1.5em;'></div>", unsafe_allow_html=True)
     col_a, col_b = st.columns([2.5, 1])
 
@@ -629,16 +617,12 @@ def _dags_view() -> None:
     """,
         unsafe_allow_html=True,
     )
-    st.markdown(
-        "<div class='badge-line'><span class='badge'>MLOps</span><span class='badge'>Airflow</span><span class='badge'>FastAPI</span><span class='badge'>MLflow</span><span class='badge'>DVC</span></div>",
-        unsafe_allow_html=True,
-    )
     st.markdown("<div style='height: 1.5em;'></div>", unsafe_allow_html=True)
-    col_a, col_b = st.columns([2.8, 1])
+    col_a, col_b = st.columns([2.45, 1.35])
 
     with col_a:
         st.markdown("""
-        <div class="card">
+        <div class="card" style="min-height: 290px;">
         <div class="metric-big">Ce qui a été fait</div>
         <div class="muted">
         <ul>
@@ -657,7 +641,7 @@ def _dags_view() -> None:
     
     with col_b:
         st.markdown("""
-        <div class="card">
+        <div class="card" style="min-height: 290px;">
         <div class="metric-big">Pourquoi ce choix</div>
         <div class="muted">
         <ul>
@@ -669,108 +653,53 @@ def _dags_view() -> None:
         """,
         unsafe_allow_html=True,
     )
+
     st.markdown("<div style='height: 1.5em;'></div>", unsafe_allow_html=True)
     st.markdown("""
-                <div style='display: flex; align-items: center; justify-content: center; margin-bottom: 2em;'>
-            <div style='
-                background: #f5f7fa;
-                border-radius: 2em;
-                padding: 0.85em 2em;
-                font-size: 1.2rem;
-                color: #223047;
-                box-shadow: 0 1px 8px 0 rgba(32,48,77,.10);
-                font-weight: 600;
-                display: inline-block;
-                border: 1.5px solid #e0e6ef;
-                '>
-                <span style='color:#223047;'>Architecture outils:</span><br>
-                <span style='color:#2b79c4; font-size:0.9em;'>Streamlit</span>
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>FastAPI</span>
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>outputs/preds_api.csv</span>
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>live_monitoring</span>
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>metrics</span>
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>Airflow décision</span><br>
-                <span style='color:#2b79c4; font-size:0.9em;'>MLflow</span>
-                <span style='margin: 0 0.5em; font-size:1em;'><-></span>
-                <span style='color:#2b79c4; font-size:0.9em;'>Training/optuna</span><br>
-                <span style='color:#2b79c4; font-size:0.9em;'>DVC + DagsHub</span>
-                <span style='margin: 0 0.5em; font-size:1em;'><-></span>
-                <span style='color:#2b79c4; font-size:0.9em;'>Versioning data/artefacts</span>  
-                </span>
+        <div class="card" style="min-height: 185px;">
+            <div class="metric-big">Architecture outils</div>
+            <div class="muted" style="line-height: 1.75;">
+                <b>Flux produit :</b> Streamlit -> FastAPI -> outputs/preds_api.csv -> live_monitoring -> metrics -> Airflow décision<br>
+                <b>Boucle entraînement :</b> MLflow <-> training / optuna<br>
+                <b>Versioning :</b> DVC + DagsHub <-> données et artefacts
             </div>
         </div>
     """, unsafe_allow_html=True)
-    
-    col_a, col_b = st.columns([1, 1])
+
+    st.markdown("<div style='height: 1.5em;'></div>", unsafe_allow_html=True)
+    col_a, col_b = st.columns([1, 1], gap="large")
 
     with col_a:
         st.markdown("""
-                <div style='display: flex; align-items: center; justify-content: center; margin-bottom: 2em;'>
-            <div style='
-                background: #f5f7fa;
-                border-radius: 2em;
-                padding: 0.85em 2em;
-                font-size: 1.2rem;
-                color: #223047;
-                box-shadow: 0 1px 8px 0 rgba(32,48,77,.10);
-                font-weight: 600;
-                display: inline-block;
-                border: 1.5px solid #e0e6ef;
-                '>
-                <span style='color:#223047;'>weather_main_dag:</span><br>
-                <span style='color:#2b79c4;'>predict_all_and_push</span><br>
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>predictions_ready</span><br>
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>compute_live_metrics</span><br>
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>compute_retrain_quality</span><br>
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>branch_on_recall</span><br>
-                <span style='color:#223047; font-size:0.8em;'>if new_rows < MIN_NEW_ROWS_FOR_RETRAIN:</span><br>
-                <span style='color:#223047; font-size:0.8em;'>skip_optuna</span><br>
-                <span style='color:#223047; font-size:0.8em;'>elif recall_combined_cv < RECALL_THRESHOLD:</span><br>
-                <span style='color:#223047; font-size:0.8em;'>trigger_optuna</span><br>
-                <span style='color:#223047; font-size:0.8em;'>else:</span><br>
-                <span style='color:#223047; font-size:0.8em;'>skip_optuna</span><br>
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>join_after_branch (fin branche qualité)</span><br><br>     
-                </span>
+        <div class="card" style="min-height: 430px;">
+            <div class="metric-big">weather_main_dag</div>
+            <div class="muted" style="line-height: 1.65;">
+                predict_all_and_push -> predictions_ready -> compute_live_metrics -> compute_retrain_quality -> branch_on_recall<br><br>
+                <b>Règle de décision :</b><br>
+                if new_rows &lt; MIN_NEW_ROWS_FOR_RETRAIN: skip_optuna<br>
+                elif recall_combined_cv &lt; RECALL_THRESHOLD: trigger_optuna<br>
+                else: skip_optuna<br><br>
+                Fin branche qualité: <b>join_after_branch</b>
             </div>
         </div>
     """, unsafe_allow_html=True)
     with col_b:
         st.markdown("""
-                <div style='display: flex; align-items: center; justify-content: center; margin-bottom: 2em;'>
-            <div style='
-                background: #f5f7fa;
-                border-radius: 2em;
-                padding: 0.85em 2em;
-                font-size: 1.2rem;
-                color: #223047;
-                box-shadow: 0 1px 8px 0 rgba(32,48,77,.10);
-                font-weight: 600;
-                display: inline-block;
-                border: 1.5px solid #e0e6ef;
-                '>
-                <span style='color:#223047;'>optuna_tuning_dag:</span><br>
-                <span style='color:#2b79c4;'>run_optuna (dataset retrain + recherche)</span><br>
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>save_best_params</span><br>    
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>retrain_with_best</span><br>    
-                <span style='margin: 0 0.5em; font-size:1.2em;'>→</span>
-                <span style='color:#2b79c4; font-size:0.9em;'>mark_retrain_consumed (watermark)</span><br>      
-                </span>
+        <div class="card" style="min-height: 430px;">
+            <div class="metric-big">optuna_tuning_dag</div>
+            <div class="muted" style="line-height: 1.75;">
+                run_optuna (dataset retrain + recherche)<br>
+                -> save_best_params<br>
+                -> retrain_with_best<br>
+                -> mark_retrain_consumed (watermark)<br><br>
+                <b>Effet :</b> évite de retraiter le même lot de lignes live déjà consommées.
             </div>
         </div>
     """, unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 1.5em;'></div>", unsafe_allow_html=True)
     st.markdown("<div class='panel'><h4>Graphes Airflow</h4></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 1.5em;'></div>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
             if IMG_AIRFLOW_MAIN.exists():
@@ -879,7 +808,7 @@ def _live_demo_view() -> None:
     st.markdown(
         """
 <div class="hero">
-  <h2 style="margin:0;">Demonstration</h2>
+  <h2 style="margin:0;">Démonstration</h2>
 </div>
 """,
         unsafe_allow_html=True,
